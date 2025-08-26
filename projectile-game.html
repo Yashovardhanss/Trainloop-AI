@@ -1,0 +1,995 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blueprint | Accuracy • Sensitivity • Specificity — Enhanced Projectile Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1E40FF; --accent:#1E40FF; --muted:#6A77B2;
+    --edge:#C0C9E8; --bg:#F0F4FF; --paper:#FFFFFF;
+    --good:#1E40FF; --bad:#cc3d3d;
+    --overlay: rgba(0,10,40,0.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background:var(--bg);
+    background-image:radial-gradient(var(--edge) 1px, transparent 1px);
+    background-size:16px 16px;
+    color:var(--ink); font-family:'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow:hidden;
+  }
+  #simulation-container{ position:relative; width:100vw; height:100vh; }
+  #simulation-canvas{ display:block; width:100%; height:100%; }
+
+  /* Panels */
+  .panel{
+    position:absolute; background:rgba(255,255,255,0.5);
+    border:1px solid var(--edge); border-radius:14px; padding:12px;
+    backdrop-filter:blur(2px); box-shadow:0 4px 12px rgba(0,0,0,0.05);
+    transition: all 0.3s ease;
+  }
+
+  /* Left column — aligned, same width */
+  #hud{
+    top:12px; left:12px; width:min(420px, 92vw);
+    display:grid; gap:10px;
+    grid-auto-rows: min-content;
+  }
+  #hud > .card, #hud > .control { width:100%; }
+
+  .row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap }
+  .row.nowrap{ flex-wrap:nowrap; overflow:auto; }
+
+  .chip{
+    border:1px solid var(--edge); border-radius:999px; padding:6px 10px;
+    font-size:12px; background:rgba(255,255,255,0.6); display:flex; gap:6px; align-items:center;
+    white-space:nowrap; transition: all 0.2s ease;
+  }
+  .chip b{font-weight:700; transition: all 0.3s ease;}
+  .chip.good{border-color:var(--good)}
+  .chip.bad{border-color:var(--bad)}
+  .chip.updated { transform: scale(1.05); border-color: var(--accent); }
+  .chip.updated b { color: var(--accent); }
+
+  .card{ 
+    border:1px solid var(--edge); border-radius:14px; padding:10px; 
+    background:rgba(255,255,255,0.6); transition: all 0.3s ease;
+  }
+  .card h4{margin:0 0 6px 0; font-size:12px; color:var(--muted); font-weight:700}
+
+  /* Controls */
+  .control{ border:1px solid var(--edge); border-radius:10px; padding:10px; display:grid; gap:6px }
+  .label{ font-size:12px; color:var(--muted); display:flex; justify-content:space-between }
+  input[type="range"]{
+    -webkit-appearance:none; appearance:none; width:100%; height:14px; background:transparent; outline:none;
+    transition: all 0.2s ease;
+  }
+  input[type="range"]::-webkit-slider-runnable-track{ height:2px; background:var(--edge); border-radius:2px }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%;
+    background:var(--paper); border:2px solid var(--ink); margin-top:-6px; cursor:pointer;
+    transition: all 0.2s ease;
+  }
+  input[type="range"]:hover::-webkit-slider-thumb{
+    transform: scale(1.1);
+    border-color: var(--accent);
+  }
+  input[type="range"]::-moz-range-track{ height:2px; background:var(--edge); border-radius:2px }
+  input[type="range"]::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%; background:var(--paper); border:2px solid var(--ink);
+  }
+  .slider-labels{ display:flex; justify-content:space-between; font-size:10px; color:var(--muted); margin-top:2px }
+  .slider-labels span{ width:20%; text-align:center }
+
+  button{
+    font-family:inherit; font-size:12px; border:1px solid var(--edge); background:transparent; color:var(--ink);
+    padding:8px 12px; border-radius:10px; cursor:pointer; transition:.2s;
+    position: relative; overflow: hidden;
+  }
+  button:hover{ border-color:var(--ink); background:rgba(255,255,255,0.6); transform: translateY(-1px); }
+  button:active{ transform: translateY(0); }
+  button.firing {
+    animation: fireButton 0.2s ease;
+  }
+
+  @keyframes fireButton {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.95); background: rgba(30,64,255,0.1); }
+    100% { transform: scale(1); }
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+  }
+
+  @keyframes countUpdate {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); }
+  }
+
+  /* Legend bottom-right aligned with left panel */
+  #legend{
+    position:absolute; right:12px; bottom:12px; left:auto; top:auto; width:min(320px, 90vw);
+    transform: translateY(-48px); /* Align with left panel bottom */
+  }
+  .legend-item{ display:flex; gap:8px; align-items:center; font-size:12px; color:var(--muted) }
+  .dot{ 
+    width:10px; height:10px; border-radius:50%; border:2px solid var(--edge);
+    transition: all 0.3s ease;
+  }
+  .dot.good{ border-color:var(--good) }
+  .dot.bad{ border-color:var(--bad) }
+
+  /* Toast */
+  #toast{
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:16px; padding:8px 12px; font-size:12px; border:1px solid var(--edge);
+    background:rgba(255,255,255,0.9); border-radius:10px; color:var(--muted);
+    opacity:0; transition:all .3s ease; backdrop-filter: blur(4px);
+  }
+  #toast.show{ opacity:1; transform: translateX(-50%) translateY(-4px); }
+
+  /* Modal */
+  #modal{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:var(--overlay); z-index:1000; backdrop-filter: blur(4px);
+  }
+  #modal.show{ display:flex; animation: modalShow 0.3s ease; }
+  #modalCard{
+    width:min(640px, 92vw);
+    background:rgba(255,255,255,0.95);
+    border:1px solid var(--edge); border-radius:16px; padding:16px;
+    box-shadow:0 20px 40px rgba(0,0,0,0.15);
+    transform: scale(0.9); transition: all 0.3s ease;
+  }
+  #modal.show #modalCard{
+    transform: scale(1);
+  }
+
+  @keyframes modalShow {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  #modalCard h3{ margin:0 0 8px 0; font-size:14px; color:var(--muted) }
+  .metricsRow{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px }
+  .cm{
+    width:100%;
+    border-collapse:collapse; font-size:12px; color:var(--ink);
+    border:1px solid var(--edge); border-radius:10px; overflow:hidden;
+  }
+  .cm th, .cm td{ border:1px solid var(--edge); padding:8px; text-align:center; background:rgba(255,255,255,0.6) }
+  .actions{ display:flex; gap:10px; justify-content:flex-end; margin-top:12px }
+
+  /* Screen shake animation */
+  @keyframes screenShake {
+    0%, 100% { transform: translate(0, 0); }
+    10% { transform: translate(-2px, -1px); }
+    20% { transform: translate(2px, 1px); }
+    30% { transform: translate(-1px, 2px); }
+    40% { transform: translate(1px, -1px); }
+    50% { transform: translate(-1px, 1px); }
+    60% { transform: translate(1px, -2px); }
+    70% { transform: translate(-2px, 1px); }
+    80% { transform: translate(2px, 2px); }
+    90% { transform: translate(-1px, -1px); }
+  }
+
+  .screen-shake {
+    animation: screenShake 0.3s ease-in-out;
+  }
+</style>
+</head>
+<body>
+  <div id="simulation-container">
+    <canvas id="simulation-canvas"></canvas>
+
+    <!-- HUD (left, aligned same width) -->
+    <div id="hud" class="panel">
+      <div class="row">
+        <div class="chip"><span>🎯 Round</span><b id="roundNo">1</b></div>
+        <div class="chip"><span>Wind</span><b id="windVal">0.0 m/s</b></div>
+        <div class="chip"><span>Shots</span><b id="shots">0/12</b></div>
+        <div class="chip"><span>Prevalence (+)</span><b id="prevVal">0.50</b></div>
+      </div>
+
+      <!-- TP/FP/TN/FN in one row -->
+      <div class="row nowrap" id="outcomeRow">
+        <div class="chip good"><span>TP</span><b id="tp">0</b></div>
+        <div class="chip bad"><span>FP</span><b id="fp">0</b></div>
+        <div class="chip"><span>TN</span><b id="tn">0</b></div>
+        <div class="chip bad"><span>FN</span><b id="fn">0</b></div>
+      </div>
+
+      <div class="card" id="metrics">
+        <h4>Metrics</h4>
+        <div class="row" style="gap:12px; flex-wrap:wrap">
+          <div class="chip"><span>Accuracy</span><b id="acc">0.00</b></div>
+          <div class="chip"><span>Sensitivity (TPR)</span><b id="tpr">0.00</b></div>
+          <div class="chip"><span>Specificity (TNR)</span><b id="tnr">0.00</b></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <div class="label">Initial Speed <span id="speedTxt">50.0 m/s</span></div>
+        <input id="speed" type="range" min="20" max="140" step="0.5" value="50" />
+        <div class="label">Launch Angle <span id="angleTxt">45°</span></div>
+        <input id="angle" type="range" min="0" max="90" step="1" value="45" />
+        <div class="slider-labels"><span>0</span><span>22.5</span><span>45</span><span>67.5</span><span>90</span></div>
+        <div class="row" style="justify-content:space-between">
+          <button id="shootBtn">Shoot</button>
+          <button id="newRoundBtn">New Round</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4>How TP / FP / TN / FN are measured here</h4>
+        <div style="font-size:12px; color:var(--muted); line-height:1.5">
+          <b>Actual positives (+)</b> are blue-outlined targets; <b>actual negatives (−)</b> are gray/tinted targets.<br><br>
+          Shooting a target = predicting "positive" for that target.<br>
+          • <b>TP</b>: hit a + target.<br>
+          • <b>FP</b>: hit a − target.<br>
+          • <b>FN</b>: a + target left unhit (predicted negative).<br>
+          • <b>TN</b>: a − target left unhit (predicted negative).<br><br>
+          <b>Accuracy</b>=(TP+TN)/N, <b>Sensitivity</b>=TP/(TP+FN), <b>Specificity</b>=TN/(TN+FP).
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend bottom-left -->
+    <div id="legend" class="panel">
+      <div class="card">
+        <h4>Legend</h4>
+        <div class="legend-item"><span class="dot good"></span> Positive target (actual +)</div>
+        <div class="legend-item"><span class="dot"></span> Negative target (actual −)</div>
+        <div class="legend-item" style="margin-top:6px; color:var(--ink)">Wind drifts arrows horizontally.</div>
+      </div>
+    </div>
+
+    <div id="toast">Press <b>Shoot</b> or hit <b>Space</b></div>
+
+    <!-- Results Modal -->
+    <div id="modal">
+      <div id="modalCard">
+        <h3>Round Results</h3>
+        <div class="metricsRow">
+          <div class="chip"><span>Accuracy</span><b id="m_acc">0.00</b></div>
+          <div class="chip"><span>Sensitivity (TPR)</span><b id="m_tpr">0.00</b></div>
+          <div class="chip"><span>Specificity (TNR)</span><b id="m_tnr">0.00</b></div>
+          <div class="chip"><span>Prevalence (+)</span><b id="m_prev">0.50</b></div>
+          <div class="chip"><span>Shots</span><b id="m_shots">0/12</b></div>
+        </div>
+        <table class="cm">
+          <thead>
+            <tr>
+              <th></th><th colspan="2">Predicted</th>
+            </tr>
+            <tr>
+              <th>Actual</th><th>Positive</th><th>Negative</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><th>Positive (+)</th><td id="m_tp">0</td><td id="m_fn">0</td></tr>
+            <tr><th>Negative (−)</th><td id="m_fp">0</td><td id="m_tn">0</td></tr>
+          </tbody>
+        </table>
+        <div class="actions">
+          <button id="closeBtn">Close</button>
+          <button id="nextRoundBtn">Next Round</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script type="module">
+  // --- Canvas & world ---
+  const container = document.getElementById('simulation-container');
+  const canvas = document.getElementById('simulation-canvas');
+  const ctx = canvas.getContext('2d');
+
+  // --- UI elements ---
+  const ui = {
+    roundNo: document.getElementById('roundNo'),
+    windVal: document.getElementById('windVal'),
+    shots: document.getElementById('shots'),
+    prevVal: document.getElementById('prevVal'),
+    tp: document.getElementById('tp'),
+    fp: document.getElementById('fp'),
+    fn: document.getElementById('fn'),
+    tn: document.getElementById('tn'),
+    acc: document.getElementById('acc'),
+    tpr: document.getElementById('tpr'),
+    tnr: document.getElementById('tnr'),
+    speed: document.getElementById('speed'),
+    angle: document.getElementById('angle'),
+    speedTxt: document.getElementById('speedTxt'),
+    angleTxt: document.getElementById('angleTxt'),
+    shootBtn: document.getElementById('shootBtn'),
+    newRoundBtn: document.getElementById('newRoundBtn'),
+    resetBtn: document.getElementById('resetBtn'),
+    toast: document.getElementById('toast'),
+  };
+
+  // Modal els
+  const modal = document.getElementById('modal');
+  const m = {
+    acc: document.getElementById('m_acc'),
+    tpr: document.getElementById('m_tpr'),
+    tnr: document.getElementById('m_tnr'),
+    prev: document.getElementById('m_prev'),
+    shots: document.getElementById('m_shots'),
+    tp: document.getElementById('m_tp'),
+    fp: document.getElementById('m_fp'),
+    fn: document.getElementById('m_fn'),
+    tn: document.getElementById('m_tn'),
+    closeBtn: document.getElementById('closeBtn'),
+    nextRoundBtn: document.getElementById('nextRoundBtn'),
+  };
+
+  // --- Blueprint physics/world params ---
+  const G = 9.81;           // m/s^2
+  let pixelsPerMeter = 7;   // zoom level (world→screen)
+  let originX = 60;         // (px) x-position of world (0,0)
+  let originY = 0;          // (px) y-position of world (0,0)
+  const groundY = 0;
+
+  // Gameplay caps
+  const MAX_SHOTS = 12;
+
+  // Animation and effects
+  let particles = [];
+  let windParticles = [];
+  let cannonRecoil = 0;
+  let screenShake = 0;
+
+  function positionOrigin(){
+    // center-left, mid-height
+    const pxLeftOfCenter = 220;
+    const pxAboveCenter = 80;
+    originX = canvas.width/2 - pxLeftOfCenter;
+    originY = canvas.height/2 + pxAboveCenter;
+  }
+
+  // --- Coordinate helpers ---
+  const wx = (x)=> originX + x * pixelsPerMeter;   // world→screen X
+  const wy = (y)=> originY - y * pixelsPerMeter;   // world→screen Y
+  const sx = (X)=> (X - originX) / pixelsPerMeter; // screen→world x
+  const sy = (Y)=> (originY - Y) / pixelsPerMeter; // screen→world y
+
+  // --- Game state ---
+  let round = 0;
+  let wind = 0;           // m/s (horizontal drift)
+  let arrows = [];        // active projectiles
+  let targets = [];       // round targets
+  let shots = 0;
+  let TP=0, FP=0, FN=0, TN=0;
+
+  // Targets & prevalence
+  const N_TARGETS = 20;     // total targets per round
+  let POS_FRAC = 0.5;       // randomized each round
+  const TARGET_R = 1.6;     // meters
+  const POS_COLORS = ['#1E40FF','#2A49FF','#3552FF','#415BFF','#4C64FF','#5870FF','#637AFF','#6E84FF','#7A8EFF','#8597FF'];
+  const NEG_COLORS = ['#9AA6CD','#A3ADD2','#ACB4D7','#B5BCDB','#BEC3E0','#C7CAE5','#D0D2E9','#D9D9EE','#E2E1F3','#EBE8F7'];
+
+  // --- Particle System ---
+  class Particle {
+    constructor(x, y, vx, vy, life, color, size = 2) {
+      this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+      this.life = life; this.maxLife = life; this.color = color; this.size = size;
+      this.gravity = Math.random() * 50 + 50;
+    }
+    update(dt) {
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.vy -= this.gravity * dt;
+      this.life -= dt;
+      return this.life > 0;
+    }
+    draw() {
+      const alpha = this.life / this.maxLife;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  class WindParticle {
+    constructor() {
+      this.reset();
+    }
+    reset() {
+      this.x = Math.random() * canvas.width;
+      this.y = Math.random() * canvas.height;
+      this.life = Math.random() * 3 + 2;
+      this.maxLife = this.life;
+      this.speed = Math.abs(wind) * 20 + 10;
+    }
+    update(dt) {
+      this.x += wind * this.speed * dt;
+      this.life -= dt;
+      
+      if (this.x > canvas.width + 50 || this.x < -50 || this.life <= 0) {
+        this.reset();
+      }
+    }
+    draw() {
+      if (Math.abs(wind) < 0.1) return;
+      
+      const alpha = Math.min(1, this.life / this.maxLife) * 0.3;
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = '#6A77B2';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x - wind * 10, this.y);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // --- Enhanced Entities ---
+  class Arrow {
+    constructor(v0, angleDeg){
+      const a = angleDeg * Math.PI/180;
+      this.x=0; this.y=0; this.vx=v0*Math.cos(a); this.vy=v0*Math.sin(a); this.active=true;
+      this.trail = [];
+      this.trailLength = 20;
+    }
+    update(dt){
+      if(!this.active) return;
+      
+      // Add current position to trail only when active
+      this.trail.push({x: this.x, y: this.y, time: Date.now()});
+      if (this.trail.length > this.trailLength) {
+        this.trail.shift();
+      }
+      
+      this.vx += wind*0.02*dt; // drift
+      this.vy -= G * dt;       // gravity
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      
+      if(this.y<=groundY){ 
+        this.y=groundY; 
+        this.active=false;
+        this.trail = []; // Clear trail when hitting ground
+        this.createImpactEffect(this.x, this.y, false);
+      }
+      
+      for(const t of targets){
+        if(t.hit) continue;
+        const dx=this.x - t.x, dy=this.y - t.y;
+        const d = Math.hypot(dx,dy);
+        if(d <= TARGET_R){
+          t.hit = true;
+          t.hitType = t.isPositive ? 'TP' : 'FP';
+          t.hitTime = Date.now();
+          this.active = false;
+          this.trail = []; // Clear trail when hitting target
+          if(t.isPositive) TP++; else FP++;
+          
+          // Enhanced hit effects
+          this.createImpactEffect(t.x, t.y, true, t.isPositive);
+          screenShake = 0.3;
+          container.classList.add('screen-shake');
+          setTimeout(() => container.classList.remove('screen-shake'), 300);
+          
+          updateCounts();
+          toast(`${t.isPositive ? 'TP' : 'FP'} — ${t.isPositive ? 'Hit positive' : 'Hit negative'}`);
+          maybeEndRound();
+          break;
+        }
+      }
+    }
+    
+    createImpactEffect(x, y, isHit, isPositive = false) {
+      const screenX = wx(x);
+      const screenY = wy(y);
+      const particleCount = isHit ? 15 : 8;
+      const color = isHit ? (isPositive ? '#1E40FF' : '#cc3d3d') : '#6A77B2';
+      
+      for (let i = 0; i < particleCount; i++) {
+        const angle = (Math.PI * 2 * i) / particleCount + Math.random() * 0.5;
+        const speed = Math.random() * 100 + 50;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        particles.push(new Particle(screenX, screenY, vx, vy, 0.8, color, Math.random() * 3 + 1));
+      }
+    }
+    
+    draw(){
+      // Draw trail
+      for (let i = 0; i < this.trail.length - 1; i++) {
+        const p1 = this.trail[i];
+        const p2 = this.trail[i + 1];
+        const alpha = (i / this.trail.length) * 0.6;
+        
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = '#1E40FF';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(wx(p1.x), wy(p1.y));
+        ctx.lineTo(wx(p2.x), wy(p2.y));
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      
+      // Draw arrow
+      const r=0.25; // m
+      ctx.beginPath();
+      ctx.arc(wx(this.x), wy(this.y), Math.max(3, r*pixelsPerMeter), 0, Math.PI*2);
+      ctx.fillStyle='#000';
+      ctx.fill();
+      ctx.strokeStyle = '#1E40FF';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+
+  class Target {
+    constructor(x,y,isPositive,idx){
+      this.x=x; this.y=y; this.baseY=y; this.isPositive=isPositive;
+      this.idx = idx;
+      this.hit=false; this.hitType=null; this.hitTime = 0;
+      this.phase = Math.random()*Math.PI*2;
+      this.pulsePhase = Math.random() * Math.PI * 2;
+      this.scale = 1;
+    }
+    update(dt){
+      this.phase += dt * 0.8;
+      this.pulsePhase += dt * 3;
+      this.y = this.baseY + Math.sin(this.phase)*0.6;
+      
+      // Gentle pulse animation
+      this.scale = 1 + Math.sin(this.pulsePhase) * 0.05;
+      
+      // Hit animation
+      if (this.hit && Date.now() - this.hitTime < 500) {
+        const hitProgress = (Date.now() - this.hitTime) / 500;
+        this.scale = 1 + (1 - hitProgress) * 0.3;
+      }
+    }
+    strokeColor(){
+      return this.isPositive ? POS_COLORS[this.idx % POS_COLORS.length]
+                             : NEG_COLORS[this.idx % NEG_COLORS.length];
+    }
+    draw(){
+      const R = TARGET_R * pixelsPerMeter * this.scale;
+      const centerX = wx(this.x);
+      const centerY = wy(this.y);
+      
+      // Outer glow effect
+      if (!this.hit) {
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, R + 4, 0, Math.PI*2);
+        ctx.globalAlpha = 0.2;
+        ctx.strokeStyle = this.strokeColor();
+        ctx.lineWidth = 6;
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+      
+      // Main circle
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, R, 0, Math.PI*2);
+      ctx.strokeStyle = this.strokeColor();
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      
+      // Hit fill effect
+      if(this.hit){
+        ctx.globalAlpha = 0.25;
+        ctx.fillStyle = (this.hitType==='TP')? '#1E40FF': '#cc3d3d';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        
+        // Ripple effect
+        if (Date.now() - this.hitTime < 800) {
+          const rippleProgress = (Date.now() - this.hitTime) / 800;
+          const rippleRadius = R + rippleProgress * 20;
+          ctx.globalAlpha = 1 - rippleProgress;
+          ctx.beginPath();
+          ctx.arc(centerX, centerY, rippleRadius, 0, Math.PI*2);
+          ctx.strokeStyle = this.strokeColor();
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+      }
+      
+      // Symbol
+      ctx.font = `bold ${Math.max(12, 13 * this.scale)}px Roboto Mono`;
+      ctx.fillStyle = this.isPositive ? '#1E40FF' : '#6A77B2';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(this.isPositive? '+':'−', centerX, centerY);
+    }
+  }
+
+  // --- Enhanced Drawing helpers ---
+  function drawGrid(){
+    ctx.strokeStyle='rgba(106,119,178,0.25)';
+    ctx.lineWidth=1;
+    const step = 10; // meters
+    const left = sx(0), right = sx(canvas.width);
+    const top = sy(0), bottom = sy(canvas.height);
+    for(let x=Math.floor(left/step)*step; x<right; x+=step){
+      ctx.beginPath(); ctx.moveTo(wx(x), wy(top)); ctx.lineTo(wx(x), wy(bottom)); ctx.stroke();
+    }
+    for(let y=Math.floor(bottom/step)*step; y<top; y+=step){
+      ctx.beginPath(); ctx.moveTo(wx(left), wy(y)); ctx.lineTo(wx(right), wy(y)); ctx.stroke();
+    }
+    // axes
+    ctx.strokeStyle='var(--ink)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(wx(left), wy(0)); ctx.lineTo(wx(right), wy(0)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(wx(0), wy(top)); ctx.lineTo(wx(0), wy(bottom)); ctx.stroke();
+  }
+
+  function drawAngleViz(){
+    const a = parseFloat(ui.angle.value) * Math.PI/180;
+    const L = 7.0; // longer rays for prominence
+    const ox = wx(0), oy = wy(0);
+
+    // x-axis ray (thicker & highlighted)
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(wx(L), wy(0));
+    ctx.strokeStyle='rgba(30,64,255,0.50)'; ctx.lineWidth=4; ctx.stroke();
+
+    // cannon direction ray with glow
+    ctx.shadowColor = '#1E40FF';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.lineTo(wx(Math.cos(a)*L), wy(Math.sin(a)*L));
+    ctx.strokeStyle='#1E40FF'; ctx.lineWidth=4; ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // enhanced wedge
+    ctx.beginPath();
+    ctx.moveTo(ox, oy);
+    ctx.arc(ox, oy, 64, 0, -a, true);
+    ctx.closePath();
+    ctx.fillStyle='rgba(30,64,255,0.2)';
+    ctx.fill();
+    ctx.strokeStyle='rgba(30,64,255,0.6)'; ctx.lineWidth=2; ctx.stroke();
+
+    // big label
+    const labelR = 86;
+    const lx = ox + Math.cos(-a/2) * labelR;
+    const ly = oy + Math.sin(-a/2) * labelR;
+    
+    ctx.font='bold 14px Roboto Mono';
+    ctx.fillStyle='#1E40FF';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(`θ = ${parseInt(ui.angle.value,10)}°`, lx, ly);
+  }
+
+  function drawCannon(){
+    const a = parseFloat(ui.angle.value) * Math.PI/180;
+    const L = 3.8; // m
+    const recoilOffset = cannonRecoil * 8;
+    
+    ctx.save();
+    ctx.translate(wx(0) - recoilOffset * Math.cos(a), wy(0) + recoilOffset * Math.sin(a));
+    ctx.rotate(-a);
+    
+    // Cannon shadow
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(2, -6, L*pixelsPerMeter, 12);
+    ctx.globalAlpha = 1;
+    
+    // Main cannon
+    ctx.fillStyle='#1E40FF';
+    ctx.fillRect(0, -7, L*pixelsPerMeter, 14);
+    
+    // Cannon details
+    ctx.fillStyle = '#415BFF';
+    ctx.fillRect(L*pixelsPerMeter - 8, -5, 6, 10);
+    
+    // Base
+    ctx.beginPath(); 
+    ctx.arc(0, 0, 12, 0, Math.PI*2); 
+    ctx.fillStyle = '#1E40FF';
+    ctx.fill();
+    ctx.strokeStyle = '#415BFF';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    ctx.restore();
+  }
+
+  function drawWind(){
+    ctx.save();
+    ctx.translate(canvas.width/2, 30);
+    
+    // Wind gauge background
+    ctx.strokeStyle='rgba(192,201,232,0.8)'; 
+    ctx.lineWidth=3;
+    ctx.beginPath(); 
+    ctx.moveTo(-50,0); 
+    ctx.lineTo(50,0); 
+    ctx.stroke();
+    
+    // Wind strength indicator
+    const len = Math.max(-45, Math.min(45, wind*20));
+    if (Math.abs(len) > 2) {
+      ctx.strokeStyle='#1E40FF';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); 
+      ctx.moveTo(0,0); 
+      ctx.lineTo(len,0); 
+      ctx.stroke();
+      
+      // Arrowhead
+      const ah = len>=0 ? 1 : -1;
+      ctx.beginPath();
+      ctx.moveTo(len,0); 
+      ctx.lineTo(len-8*ah,-5); 
+      ctx.lineTo(len-8*ah,5); 
+      ctx.closePath();
+      ctx.fillStyle='#1E40FF'; 
+      ctx.fill();
+    }
+    
+    // Wind labels
+    ctx.font = '10px Roboto Mono';
+    ctx.fillStyle = '#6A77B2';
+    ctx.textAlign = 'center';
+    ctx.fillText('← 2 m/s', -40, -12);
+    ctx.fillText('0', 0, -12);
+    ctx.fillText('2 m/s →', 40, -12);
+    
+    ctx.restore();
+  }
+
+  // --- Enhanced game functions ---
+  function animateCountUpdate(element) {
+    element.style.animation = 'countUpdate 0.3s ease';
+    setTimeout(() => {
+      element.style.animation = '';
+    }, 300);
+  }
+
+  function updateCounts(){
+    // Animate count changes
+    animateCountUpdate(ui.tp);
+    animateCountUpdate(ui.fp);
+    animateCountUpdate(ui.fn);
+    animateCountUpdate(ui.tn);
+    
+    ui.tp.textContent = TP; 
+    ui.fp.textContent = FP; 
+    ui.fn.textContent = FN; 
+    ui.tn.textContent = TN;
+    
+    const total = (TP+FP+FN+TN) || 1;
+    const acc = (TP+TN)/total;
+    const tpr = TP/(TP+FN || 1);
+    const tnr = TN/(TN+FP || 1);
+    
+    ui.acc.textContent = acc.toFixed(2);
+    ui.tpr.textContent = tpr.toFixed(2);
+    ui.tnr.textContent = tnr.toFixed(2);
+    
+    // Add updated class temporarily for visual feedback
+    [ui.acc, ui.tpr, ui.tnr].forEach(el => {
+      el.parentElement.classList.add('updated');
+      setTimeout(() => el.parentElement.classList.remove('updated'), 300);
+    });
+  }
+
+  // --- Rounds, counts, metrics ---
+  function randomRange(a,b){ return Math.random()*(b-a)+a; }
+
+  function randomPrevalence(){
+    // Random between 0.2..0.8 (rounded to 0.05 steps for readability)
+    const raw = 0.2 + Math.random()*0.6;
+    return Math.round(raw*20)/20;
+  }
+
+  function layoutTargets(){
+    targets = [];
+    const nPos = Math.round(N_TARGETS*POS_FRAC);
+    const layout = Array.from({length:N_TARGETS}, (_,i)=> i<nPos);
+    for(let i=layout.length-1;i>0;i--){ const j=(Math.random()*(i+1))|0; [layout[i],layout[j]]=[layout[j],layout[i]]; }
+    for(let i=0;i<N_TARGETS;i++){
+      const x = randomRange(20, 95) + (i%4)*4.0;
+      const y = randomRange(8, 42) + ((i/4)|0)*0.5;
+      targets.push(new Target(x,y, layout[i], i));
+    }
+  }
+
+  function newRound(){
+    round++;
+    ui.roundNo.textContent = round;
+    arrows = [];
+    particles = [];
+    
+    // wind
+    wind = Math.round((Math.random()*4 - 2)*10)/10; // -2..2
+    ui.windVal.textContent = `${wind.toFixed(1)} m/s`;
+    
+    // prevalence
+    POS_FRAC = randomPrevalence();
+    ui.prevVal.textContent = POS_FRAC.toFixed(2);
+    
+    // targets
+    layoutTargets();
+    
+    // counts & shots
+    shots = 0; TP=0; FP=0; FN=0; TN=0;
+    updateCounts();
+    ui.shots.textContent = `${shots}/${MAX_SHOTS}`;
+    toast('New round — prevalence randomized, wind updated, targets repositioned.');
+  }
+
+  function finalizeMetrics(){
+    const P = targets.filter(t=>t.isPositive);
+    const Nn = targets.filter(t=>!t.isPositive);
+    const tp = targets.filter(t=>t.hit && t.isPositive).length;
+    const fp = targets.filter(t=>t.hit && !t.isPositive).length;
+    const fn = P.length - tp;
+    const tn = Nn.length - fp;
+
+    TP = tp; FP = fp; FN = fn; TN = tn;
+    updateCounts();
+  }
+
+  // --- Modal / end-of-round ---
+  function openModal(){
+    // fill modal values
+    m.acc.textContent = ui.acc.textContent;
+    m.tpr.textContent = ui.tpr.textContent;
+    m.tnr.textContent = ui.tnr.textContent;
+    m.prev.textContent = POS_FRAC.toFixed(2);
+    m.shots.textContent = `${shots}/${MAX_SHOTS}`;
+    m.tp.textContent = TP; m.fp.textContent = FP; m.fn.textContent = FN; m.tn.textContent = TN;
+    modal.classList.add('show');
+  }
+  function closeModal(){ modal.classList.remove('show'); }
+
+  function maybeEndRound(){
+    if(shots >= MAX_SHOTS){
+      finalizeMetrics();
+      setTimeout(openModal, 500); // Delay for effect completion
+    }
+  }
+
+  // --- Main loop ---
+  let last=0;
+  function tick(ts){
+    const dt = Math.min(0.033, (ts-last)/1000 || 0);
+    last = ts;
+
+    if(canvas.width!==canvas.clientWidth || canvas.height!==canvas.clientHeight){
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+      positionOrigin();
+      
+      // Resize wind particle system
+      windParticles = Array.from({length: 30}, () => new WindParticle());
+    }
+
+    // Update animations
+    cannonRecoil *= 0.9; // Decay recoil
+    screenShake *= 0.9;
+    
+    arrows.forEach(a=>a.update(dt));
+    targets.forEach(t=>t.update(dt));
+    
+    // Update particles
+    particles = particles.filter(p => p.update(dt));
+    windParticles.forEach(p => p.update(dt));
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    drawGrid();
+    
+    // Draw wind particles
+    windParticles.forEach(p => p.draw());
+    
+    drawWind();
+    drawAngleViz();
+    targets.forEach(t=>t.draw());
+    arrows.forEach(a=>a.draw());
+    drawCannon();
+    
+    // Draw particles
+    particles.forEach(p => p.draw());
+
+    requestAnimationFrame(tick);
+  }
+
+  // --- Enhanced shooting, UI events ---
+  function shoot(){
+    if(shots >= MAX_SHOTS) { maybeEndRound(); return; }
+    
+    const v0 = parseFloat(ui.speed.value);
+    const angle = parseInt(ui.angle.value,10);
+    arrows.push(new Arrow(v0, angle));
+    
+    // Enhanced shooting effects
+    cannonRecoil = 1.0;
+    ui.shootBtn.classList.add('firing');
+    setTimeout(() => ui.shootBtn.classList.remove('firing'), 200);
+    
+    shots++; 
+    ui.shots.textContent = `${shots}/${MAX_SHOTS}`;
+    updateCounts();
+    maybeEndRound();
+  }
+
+  ui.speed.addEventListener('input', e=> ui.speedTxt.textContent = `${parseFloat(e.target.value).toFixed(1)} m/s`);
+  ui.angle.addEventListener('input', e=> ui.angleTxt.textContent = `${e.target.value}°`);
+  ui.shootBtn.addEventListener('click', shoot);
+  
+  document.addEventListener('keydown', (e)=>{
+    if(e.key===' ') { e.preventDefault(); shoot(); }
+    if(e.key==='ArrowUp') { 
+      ui.angle.value = Math.min(90, parseInt(ui.angle.value)+1); 
+      ui.angle.dispatchEvent(new Event('input')); 
+    }
+    if(e.key==='ArrowDown') { 
+      ui.angle.value = Math.max(0, parseInt(ui.angle.value)-1); 
+      ui.angle.dispatchEvent(new Event('input')); 
+    }
+  });
+
+  ui.newRoundBtn.addEventListener('click', ()=>{
+    closeModal();
+    newRound();
+  });
+
+  ui.resetBtn.addEventListener('click', ()=>{
+    closeModal();
+    round = 0;
+    newRound();
+  });
+
+  m.closeBtn.addEventListener('click', closeModal);
+  m.nextRoundBtn.addEventListener('click', ()=>{
+    closeModal();
+    newRound();
+  });
+
+  // --- Toast helper ---
+  let toastTimer=null;
+  function toast(msg){
+    ui.toast.innerHTML = msg;
+    ui.toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> ui.toast.classList.remove('show'), 1800);
+  }
+
+  // --- Init ---
+  function init(){
+    canvas.width = canvas.clientWidth; 
+    canvas.height = canvas.clientHeight;
+    positionOrigin();
+    
+    // Initialize particle systems
+    windParticles = Array.from({length: 30}, () => new WindParticle());
+    
+    ui.speedTxt.textContent = `${parseFloat(ui.speed.value).toFixed(1)} m/s`;
+    ui.angleTxt.textContent = `${ui.angle.value}°`;
+    wind = 0; ui.windVal.textContent = `${wind.toFixed(1)} m/s`;
+    ui.shots.textContent = `0/${MAX_SHOTS}`;
+    newRound(); // prevalence randomized here
+    requestAnimationFrame(tick);
+  }
+  init();
+</script>
+</body>
+</html>

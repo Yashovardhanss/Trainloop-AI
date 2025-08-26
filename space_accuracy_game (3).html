@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blueprint | Space Defense Accuracy Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1E40FF; --accent:#1E40FF; --muted:#6A77B2;
+    --edge:#C0C9E8; --bg:#F0F4FF; --paper:#FFFFFF;
+    --good:#1E40FF; --bad:#cc3d3d;
+    --overlay: rgba(0,10,40,0.4);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; overflow:hidden;}
+  body{
+    background:var(--bg);
+    color:var(--ink); 
+    font-family:'Roboto Mono', ui-monospace, monospace;
+    cursor: crosshair;
+  }
+  
+  #game-container{ 
+    position:relative; width:100vw; height:100vh; 
+  }
+  
+  #game-canvas{ 
+    display:block; width:100%; height:100%; 
+    background: linear-gradient(180deg, #0a0a2e 0%, #16213e 50%, #0f1419 100%); 
+    cursor: crosshair; 
+  }
+
+  /* Minimal HUD */
+  #hud{
+    position:absolute; top:16px; left:16px; 
+    display:flex; flex-direction:column; gap:8px;
+    pointer-events:none;
+  }
+  
+  .info{
+    background:rgba(255,255,255,0.9); 
+    border:1px solid var(--edge); 
+    border-radius:8px; 
+    padding:6px 10px;
+    font-size:11px;
+    backdrop-filter:blur(4px);
+    pointer-events:auto;
+  }
+  
+  .metrics{
+    display:flex; gap:8px; flex-wrap:wrap;
+  }
+  
+  .metric{
+    background:rgba(255,255,255,0.85);
+    border:1px solid var(--edge);
+    border-radius:6px;
+    padding:3px 6px;
+    font-size:10px;
+    min-width:40px;
+    text-align:center;
+  }
+  
+  .metric.tp{border-color:var(--good); background:rgba(30,64,255,0.1);}
+  .metric.fp{border-color:var(--bad); background:rgba(204,61,61,0.1);}
+  .metric b{font-weight:700; color:var(--ink);}
+  
+  /* Controls */
+  #controls{
+    position:absolute; bottom:16px; left:16px;
+    background:rgba(255,255,255,0.9);
+    border:1px solid var(--edge);
+    border-radius:8px;
+    padding:8px;
+    font-size:11px;
+    backdrop-filter:blur(4px);
+  }
+  
+  button{
+    font-family:inherit; font-size:10px; 
+    border:1px solid var(--edge); 
+    background:rgba(255,255,255,0.8); 
+    color:var(--ink);
+    padding:4px 8px; 
+    border-radius:6px; 
+    cursor:pointer; 
+    margin:2px;
+    transition:all 0.2s;
+  }
+  button:hover{ 
+    border-color:var(--ink); 
+    background:rgba(255,255,255,1); 
+  }
+
+  /* Crosshair */
+  #crosshair {
+    position: absolute; width: 20px; height: 20px;
+    pointer-events: none; z-index: 10; opacity: 0.8;
+  }
+  #crosshair::before, #crosshair::after {
+    content: ''; position: absolute; background: #00ffff;
+    box-shadow: 0 0 4px #00ffff;
+  }
+  #crosshair::before { width: 20px; height: 2px; top: 9px; left: 0; }
+  #crosshair::after { width: 2px; height: 20px; top: 0; left: 9px; }
+
+  /* Toast */
+  #toast{
+    position:absolute; top:50%; left:50%; 
+    transform:translate(-50%, -50%);
+    background:rgba(0,0,0,0.8); color:#fff;
+    padding:8px 12px; border-radius:6px;
+    font-size:12px; opacity:0; 
+    transition:all 0.3s; z-index:100;
+  }
+  #toast.show{ opacity:1; }
+
+  /* Results Modal */
+  #modal{
+    position:absolute; inset:0; display:none; 
+    align-items:center; justify-content:center;
+    background:var(--overlay); z-index:1000;
+  }
+  #modal.show{ display:flex; }
+  
+  #modal-content{
+    background:rgba(255,255,255,0.95);
+    border:1px solid var(--edge); 
+    border-radius:12px; 
+    padding:16px; 
+    text-align:center;
+    min-width:300px;
+  }
+  
+  #modal h3{ margin:0 0 12px 0; font-size:14px; }
+  
+  .final-metrics{
+    display:grid; grid-template-columns:1fr 1fr; 
+    gap:8px; margin:12px 0;
+  }
+  
+  .final-metric{
+    background:rgba(255,255,255,0.8);
+    border:1px solid var(--edge);
+    border-radius:6px;
+    padding:8px;
+    font-size:11px;
+  }
+  
+  .modal-actions{
+    display:flex; gap:8px; justify-content:center; 
+    margin-top:12px;
+  }
+
+  @keyframes screenShake {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(-2px, 2px); }
+    50% { transform: translate(2px, -2px); }
+    75% { transform: translate(-2px, -2px); }
+  }
+  .screen-shake { animation: screenShake 0.2s ease-in-out; }
+</style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div id="crosshair"></div>
+
+    <!-- Minimal HUD -->
+    <div id="hud">
+      <div class="info">
+        <b>Wave <span id="wave">1</span></b> | 
+        Threat Rate: <span id="threat-rate">50%</span> |
+        Shots: <span id="shots">0</span>
+      </div>
+      
+      <div class="metrics">
+        <div class="metric tp"><b id="tp">0</b><br>TP</div>
+        <div class="metric fp"><b id="fp">0</b><br>FP</div>
+        <div class="metric"><b id="tn">0</b><br>TN</div>
+        <div class="metric"><b id="fn">0</b><br>FN</div>
+        <div class="metric"><b id="acc">0.00</b><br>ACC</div>
+      </div>
+    </div>
+
+    <!-- Minimal Controls -->
+    <div id="controls">
+      <b>Click to shoot</b><br>
+      <button id="new-wave">New Wave</button>
+      <button id="reset">Reset</button>
+    </div>
+
+    <div id="toast"></div>
+
+    <!-- Results Modal -->
+    <div id="modal">
+      <div id="modal-content">
+        <h3>Wave Complete</h3>
+        <div class="final-metrics">
+          <div class="final-metric">Accuracy<br><b id="final-acc">0.00</b></div>
+          <div class="final-metric">Shots Fired<br><b id="final-shots">0</b></div>
+          <div class="final-metric">Threats Hit<br><b id="final-tp">0</b></div>
+          <div class="final-metric">Mistakes<br><b id="final-fp">0</b></div>
+        </div>
+        <div class="modal-actions">
+          <button id="close-modal">Close</button>
+          <button id="next-wave">Next Wave</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  const canvas = document.getElementById('game-canvas');
+  const ctx = canvas.getContext('2d');
+  const crosshair = document.getElementById('crosshair');
+  const container = document.getElementById('game-container');
+
+  // UI elements
+  const ui = {
+    wave: document.getElementById('wave'),
+    threatRate: document.getElementById('threat-rate'),
+    shots: document.getElementById('shots'),
+    tp: document.getElementById('tp'),
+    fp: document.getElementById('fp'),
+    tn: document.getElementById('tn'),
+    fn: document.getElementById('fn'),
+    acc: document.getElementById('acc'),
+    toast: document.getElementById('toast'),
+    modal: document.getElementById('modal'),
+    finalAcc: document.getElementById('final-acc'),
+    finalShots: document.getElementById('final-shots'),
+    finalTp: document.getElementById('final-tp'),
+    finalFp: document.getElementById('final-fp')
+  };
+
+  // Game state
+  let wave = 0;
+  let threatRate = 0.5;
+  let shots = 0;
+  let TP = 0, FP = 0, TN = 0, FN = 0;
+  let ships = [];
+  let lasers = [];
+  let particles = [];
+  let stars = [];
+  let mouseX = 0, mouseY = 0;
+
+  // Constants
+  const SHIP_COUNT = 16;
+  const SHIP_SIZE = 14;
+
+  // Particle class
+  class Particle {
+    constructor(x, y, vx, vy, life, color, size = 2) {
+      this.x = x; this.y = y; this.vx = vx; this.vy = vy;
+      this.life = life; this.maxLife = life; 
+      this.color = color; this.size = size;
+    }
+    update(dt) {
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.life -= dt;
+      return this.life > 0;
+    }
+    draw() {
+      const alpha = this.life / this.maxLife;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.size * alpha, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Star class
+  class Star {
+    constructor() {
+      this.x = Math.random() * canvas.width;
+      this.y = Math.random() * canvas.height;
+      this.brightness = Math.random() * 0.6 + 0.4;
+      this.phase = Math.random() * Math.PI * 2;
+    }
+    update(dt) { this.phase += dt; }
+    draw() {
+      const alpha = this.brightness * (0.8 + 0.2 * Math.sin(this.phase));
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  // Laser class
+  class Laser {
+    constructor(targetX, targetY) {
+      this.x = canvas.width / 2;
+      this.y = canvas.height - 60;
+      
+      const dx = targetX - this.x;
+      const dy = targetY - this.y;
+      const distance = Math.hypot(dx, dy);
+      const speed = 400;
+      
+      this.vx = (dx / distance) * speed;
+      this.vy = (dy / distance) * speed;
+      this.active = true;
+      this.trail = [];
+    }
+    
+    update(dt) {
+      if (!this.active) return;
+      
+      this.trail.push({x: this.x, y: this.y});
+      if (this.trail.length > 8) this.trail.shift();
+      
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      
+      if (this.y < -50 || this.x < -50 || this.x > canvas.width + 50) {
+        this.active = false;
+      }
+      
+      // Check ship hits
+      for (const ship of ships) {
+        if (ship.destroyed || ship.escaped) continue;
+        const dx = this.x - ship.x;
+        const dy = this.y - ship.y;
+        if (Math.hypot(dx, dy) <= SHIP_SIZE) {
+          ship.destroyed = true;
+          ship.hitTime = Date.now();
+          this.active = false;
+          
+          if (ship.isThreat) {
+            TP++;
+            this.explode(ship.x, ship.y, '#00ff00');
+            toast('Threat eliminated!');
+          } else {
+            FP++;
+            this.explode(ship.x, ship.y, '#ff4444');
+            toast('Friendly fire!');
+          }
+          
+          updateUI();
+          checkWaveEnd();
+          break;
+        }
+      }
+    }
+    
+    explode(x, y, color) {
+      for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI * 2 * i) / 12;
+        const speed = Math.random() * 100 + 50;
+        const vx = Math.cos(angle) * speed;
+        const vy = Math.sin(angle) * speed;
+        particles.push(new Particle(x, y, vx, vy, 0.8, color, Math.random() * 3 + 1));
+      }
+      
+      container.classList.add('screen-shake');
+      setTimeout(() => container.classList.remove('screen-shake'), 200);
+    }
+    
+    draw() {
+      // Trail
+      for (let i = 0; i < this.trail.length - 1; i++) {
+        const alpha = (i / this.trail.length) * 0.6;
+        ctx.globalAlpha = alpha;
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(this.trail[i].x, this.trail[i].y);
+        ctx.lineTo(this.trail[i + 1].x, this.trail[i + 1].y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      
+      // Laser bolt
+      ctx.fillStyle = '#00ffff';
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Ship class
+  class Ship {
+    constructor(x, y, isThreat) {
+      this.x = x; this.y = y; this.baseX = x;
+      this.isThreat = isThreat;
+      this.destroyed = false; this.escaped = false;
+      this.speed = 40 + Math.random() * 20;
+      this.phase = Math.random() * Math.PI * 2;
+      this.hitTime = 0;
+    }
+    
+    update(dt) {
+      this.phase += dt * 2;
+      this.x = this.baseX + Math.sin(this.phase) * 8;
+      
+      if (!this.destroyed && !this.escaped) {
+        this.y += this.speed * dt;
+        
+        if (this.y >= canvas.height + 30) {
+          this.escaped = true;
+          if (this.isThreat) FN++;
+          else TN++;
+          updateUI();
+          checkWaveEnd();
+        }
+      }
+    }
+    
+    draw() {
+      if (this.escaped && !this.destroyed) return;
+      
+      const size = SHIP_SIZE;
+      const color = this.isThreat ? '#ff4444' : '#4488ff';
+      
+      // Glow effect
+      if (!this.destroyed) {
+        ctx.globalAlpha = 0.3;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, size + 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      
+      // Ship shape
+      ctx.fillStyle = color;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      
+      if (this.isThreat) {
+        // Triangle for threat
+        ctx.beginPath();
+        ctx.moveTo(this.x, this.y - size);
+        ctx.lineTo(this.x - size * 0.8, this.y + size * 0.6);
+        ctx.lineTo(this.x + size * 0.8, this.y + size * 0.6);
+        ctx.closePath();
+      } else {
+        // Circle for friendly
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, size * 0.8, 0, Math.PI * 2);
+      }
+      
+      ctx.fill();
+      ctx.stroke();
+      
+      // Destruction effect
+      if (this.destroyed && Date.now() - this.hitTime < 500) {
+        const progress = (Date.now() - this.hitTime) / 500;
+        const radius = size + progress * 20;
+        ctx.globalAlpha = 1 - progress;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
+    }
+  }
+
+  // Game functions
+  function updateUI() {
+    ui.shots.textContent = shots;
+    ui.tp.textContent = TP;
+    ui.fp.textContent = FP;
+    ui.tn.textContent = TN;
+    ui.fn.textContent = FN;
+    
+    const total = TP + FP + TN + FN || 1;
+    ui.acc.textContent = ((TP + TN) / total).toFixed(2);
+  }
+
+  function newWave() {
+    wave++;
+    threatRate = 0.3 + Math.random() * 0.4; // 30-70%
+    
+    ui.wave.textContent = wave;
+    ui.threatRate.textContent = Math.round(threatRate * 100) + '%';
+    
+    ships = [];
+    lasers = [];
+    particles = [];
+    shots = 0;
+    TP = FP = TN = FN = 0;
+    
+    // Create ships
+    const threatCount = Math.round(SHIP_COUNT * threatRate);
+    const shipTypes = Array(SHIP_COUNT).fill(false);
+    for (let i = 0; i < threatCount; i++) shipTypes[i] = true;
+    
+    // Shuffle
+    for (let i = shipTypes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shipTypes[i], shipTypes[j]] = [shipTypes[j], shipTypes[i]];
+    }
+    
+    // Spawn ships
+    for (let i = 0; i < SHIP_COUNT; i++) {
+      const x = 50 + Math.random() * (canvas.width - 100);
+      const y = -100 - i * 40;
+      ships.push(new Ship(x, y, shipTypes[i]));
+    }
+    
+    updateUI();
+    toast(`Wave ${wave} - ${Math.round(threatRate * 100)}% threats`);
+  }
+
+  function checkWaveEnd() {
+    if (ships.every(s => s.destroyed || s.escaped)) {
+      setTimeout(showResults, 1000);
+    }
+  }
+
+  function showResults() {
+    const total = TP + FP + TN + FN;
+    ui.finalAcc.textContent = ((TP + TN) / total).toFixed(2);
+    ui.finalShots.textContent = shots;
+    ui.finalTp.textContent = TP;
+    ui.finalFp.textContent = FP;
+    ui.modal.classList.add('show');
+  }
+
+  function closeModal() {
+    ui.modal.classList.remove('show');
+  }
+
+  function toast(msg) {
+    ui.toast.textContent = msg;
+    ui.toast.classList.add('show');
+    setTimeout(() => ui.toast.classList.remove('show'), 1500);
+  }
+
+  function fireLaser() {
+    if (mouseX === 0 && mouseY === 0) return;
+    lasers.push(new Laser(mouseX, mouseY));
+    shots++;
+    updateUI();
+  }
+
+  // Event listeners
+  canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    mouseX = e.clientX - rect.left;
+    mouseY = e.clientY - rect.top;
+    crosshair.style.left = (e.clientX - 10) + 'px';
+    crosshair.style.top = (e.clientY - 10) + 'px';
+  });
+
+  canvas.addEventListener('click', fireLaser);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ') { e.preventDefault(); fireLaser(); }
+  });
+
+  document.getElementById('new-wave').addEventListener('click', () => {
+    closeModal(); newWave();
+  });
+  document.getElementById('reset').addEventListener('click', () => {
+    closeModal(); wave = 0; newWave();
+  });
+  document.getElementById('close-modal').addEventListener('click', closeModal);
+  document.getElementById('next-wave').addEventListener('click', () => {
+    closeModal(); newWave();
+  });
+
+  // Game loop
+  let lastTime = 0;
+  function gameLoop(timestamp) {
+    const dt = Math.min(0.033, (timestamp - lastTime) / 1000);
+    lastTime = timestamp;
+
+    // Resize handling
+    if (canvas.width !== canvas.clientWidth || canvas.height !== canvas.clientHeight) {
+      canvas.width = canvas.clientWidth;
+      canvas.height = canvas.clientHeight;
+      stars = Array.from({length: 100}, () => new Star());
+    }
+
+    // Update
+    ships.forEach(ship => ship.update(dt));
+    lasers = lasers.filter(laser => { laser.update(dt); return laser.active; });
+    particles = particles.filter(particle => particle.update(dt));
+    stars.forEach(star => star.update(dt));
+
+    // Draw
+    const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    gradient.addColorStop(0, '#0a0a2e');
+    gradient.addColorStop(0.5, '#16213e');
+    gradient.addColorStop(1, '#0f1419');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    stars.forEach(star => star.draw());
+    ships.forEach(ship => ship.draw());
+    lasers.forEach(laser => laser.draw());
+    particles.forEach(particle => particle.draw());
+
+    // Draw turret
+    const turretX = canvas.width / 2;
+    const turretY = canvas.height - 60;
+    ctx.fillStyle = '#1E40FF';
+    ctx.fillRect(turretX - 20, turretY - 8, 40, 16);
+    ctx.fillStyle = '#00ffff';
+    ctx.beginPath();
+    ctx.arc(turretX, turretY, 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    requestAnimationFrame(gameLoop);
+  }
+
+  // Initialize
+  function init() {
+    canvas.width = canvas.clientWidth;
+    canvas.height = canvas.clientHeight;
+    stars = Array.from({length: 100}, () => new Star());
+    newWave();
+    requestAnimationFrame(gameLoop);
+  }
+
+  init();
+</script>
+</body>
+</html>

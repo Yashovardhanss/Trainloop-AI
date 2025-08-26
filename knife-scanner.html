@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Blueprint | Airport Scanner — Confusion Matrix Trainer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#1E40FF; --accent:#1E40FF; --muted:#6A77B2;
+    --edge:#C0C9E8; --bg:#F0F4FF; --paper:#FFFFFF;
+    --good:#1E40FF; --bad:#cc3d3d;
+    --overlay: rgba(0,10,40,0.4);
+    --bluePlus:#1E40FF; /* + should be blue */
+    --redMinus:#cc3d3d; /* - should be red  */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%; margin:0; overflow:hidden;}
+  body{
+    background:var(--bg);
+    color:var(--ink); 
+    font-family:'Roboto Mono', ui-monospace, monospace;
+  }
+  #game-container{ position:relative; width:100vw; height:100vh; }
+
+  /* Canvas background (conveyor vibe) */
+  #game-canvas{ 
+    display:block; width:100%; height:100%; 
+    background:
+      linear-gradient(180deg, #0a0a2e 0%, #16213e 55%, #0f1419 100%);
+  }
+
+  /* HUD cluster (top-left) */
+  #hud{
+    position:absolute; top:16px; left:16px; right:auto;
+    display:flex; flex-direction:column; gap:8px; width:max-content;
+    pointer-events:none;
+  }
+  .info, .card{
+    background:rgba(255,255,255,0.95); 
+    border:1px solid var(--edge); 
+    border-radius:10px; 
+    padding:10px 12px;
+    font-size:12px;
+    backdrop-filter:blur(4px);
+    pointer-events:auto;
+  }
+  .info b{font-size:12px}
+  .metrics{
+    display:flex; gap:8px; flex-wrap:wrap;
+  }
+  .metric{
+    background:rgba(255,255,255,0.9);
+    border:1px solid var(--edge);
+    border-radius:8px;
+    padding:6px 8px;
+    font-size:11px;
+    min-width:52px; text-align:center;
+  }
+  .metric.tp{border-color:var(--good); background:rgba(30,64,255,0.08);}
+  .metric.fp{border-color:var(--bad);  background:rgba(204,61,61,0.08);}
+  .metric b{font-weight:700; color:#111;}
+
+  /* Explainer card (left column, aligned width) */
+  #explainer{
+    max-width:320px; line-height:1.5;
+  }
+  #explainer .chips{display:flex; gap:6px; margin:8px 0 4px 0; flex-wrap:wrap}
+  .chip{border:1px solid var(--edge); border-radius:999px; padding:2px 8px; font-size:10px; background:#fff}
+  .chip.tp{border-color:var(--good)}
+  .chip.fp{border-color:var(--bad)}
+  .chip.tn, .chip.fn{opacity:0.9}
+
+  /* Controls (bottom-left) */
+  #controls{
+    position:absolute; bottom:16px; left:16px;
+    background:rgba(255,255,255,0.95);
+    border:1px solid var(--edge);
+    border-radius:10px;
+    padding:10px;
+    font-size:12px;
+    backdrop-filter:blur(4px);
+    width:max-content;
+  }
+  button{
+    font-family:inherit; font-size:12px; 
+    border:1px solid var(--edge); 
+    background:rgba(255,255,255,0.95); 
+    color:var(--ink);
+    padding:6px 10px; 
+    border-radius:8px; 
+    cursor:pointer; 
+    margin:3px 4px 0 0;
+    transition:all 0.2s;
+  }
+  button:hover{ border-color:var(--ink); background:#fff; }
+
+  /* Decision panel (center bottom) */
+  #decision{
+    position:absolute; bottom:16px; left:50%; transform:translateX(-50%);
+    display:flex; gap:10px; align-items:center;
+    background:rgba(255,255,255,0.95);
+    border:1px solid var(--edge); border-radius:12px; padding:10px 12px;
+  }
+  #decision .key{font-weight:700; border:1px solid var(--edge); padding:2px 6px; border-radius:6px; background:#fff; font-size:12px}
+  #decision .opt{display:flex; align-items:center; gap:8px}
+
+  /* Toast */
+  #toast{
+    position:absolute; top:50%; left:50%; transform:translate(-50%, -50%);
+    background:rgba(0,0,0,0.85); color:#fff; padding:10px 14px; border-radius:8px;
+    font-size:13px; opacity:0; transition:opacity 0.25s; z-index:100;
+  }
+  #toast.show{ opacity:1; }
+
+  /* Modal */
+  #modal{
+    position:absolute; inset:0; display:none; align-items:center; justify-content:center;
+    background:var(--overlay); z-index:2000;
+  }
+  #modal.show{ display:flex; }
+  #modal-content{
+    background:rgba(255,255,255,0.98);
+    border:1px solid var(--edge); border-radius:14px; padding:18px; min-width:320px; max-width:680px;
+  }
+  #modal h3{ margin:0 0 12px 0; font-size:16px; }
+  .final-grid{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:8px;
+  }
+  .final-metric{
+    background:#fff; border:1px solid var(--edge); border-radius:8px; padding:10px; font-size:12px; text-align:center;
+  }
+  .cmatrix{
+    margin-top:12px; border:1px solid var(--edge); border-radius:10px; overflow:hidden;
+  }
+  .cmatrix table{ width:100%; border-collapse:collapse; font-size:12px; }
+  .cmatrix th, .cmatrix td{ border-bottom:1px solid var(--edge); padding:8px; text-align:center; background:#fff; }
+  .cmatrix tr:last-child td{ border-bottom:none; }
+  .modal-actions{ display:flex; gap:8px; justify-content:center; margin-top:12px; }
+
+  /* Bag visuals (+ blue, – red) */
+  .legend{
+    position:absolute; top:16px; right:16px; display:flex; gap:8px; flex-direction:column; width:max-content;
+  }
+  .legend .card{ width:260px }
+  .lg-row{ display:flex; gap:8px; align-items:center; }
+  .tag{ font-weight:700; padding:2px 8px; border-radius:6px; border:1px solid var(--edge); background:#fff; }
+  .tag.plus{ color:var(--bluePlus); border-color:var(--bluePlus); }
+  .tag.minus{ color:var(--redMinus); border-color:var(--redMinus); }
+
+  /* Ensure left cards same width and not overlapping canvas content */
+  #hud .info, #explainer { width: 320px; }
+
+  /* Simple conveyor focus zone */
+  .zone{
+    position:absolute; left:50%; top:20%; transform:translateX(-50%);
+    width:min(560px, 80vw); height:52vh;
+    border:1px dashed rgba(192,201,232,0.65); border-radius:12px;
+    background:linear-gradient(transparent, rgba(255,255,255,0.03) 60%, transparent);
+    pointer-events:none;
+  }
+
+  /* X-ray bag glyph size */
+  .glyph{ font-weight:700; font-size:28px; letter-spacing:1px; }
+</style>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="game-canvas"></canvas>
+    <div class="zone" aria-hidden="true"></div>
+
+    <!-- Left HUD -->
+    <div id="hud">
+      <div class="info" id="session">
+        <b>Round <span id="round">1</span></b> • Knife Rate: <span id="knife-rate">—</span> • Bag <span id="bag-idx">0</span>/<span id="bag-total">0</span>
+      </div>
+      <div class="info">
+        <div class="metrics">
+          <div class="metric tp"><b id="tp">0</b><br>TP</div>
+          <div class="metric fp"><b id="fp">0</b><br>FP</div>
+          <div class="metric"><b id="tn">0</b><br>TN</div>
+          <div class="metric"><b id="fn">0</b><br>FN</div>
+          <div class="metric"><b id="acc">0.00</b><br>ACC</div>
+          <div class="metric"><b id="prec">0.00</b><br>PREC</div>
+          <div class="metric"><b id="rec">0.00</b><br>RECALL</div>
+          <div class="metric"><b id="spec">0.00</b><br>SPEC</div>
+        </div>
+      </div>
+      <div class="card" id="explainer">
+        <b>Airport Scanner Mental Model</b><br>
+        Each bag either really has a prohibited item (<span class="tag plus">+</span>) or it doesn’t (<span class="tag minus">–</span>). You decide to <b>Flag</b> (predict “knife”) or <b>Clear</b> (predict “no knife”).
+        <div class="chips">
+          <span class="chip tp">TP: Flagged + (correct catch)</span>
+          <span class="chip">TN: Cleared – (correct rejection)</span>
+          <span class="chip fp">FP: Flagged – (false alarm)</span>
+          <span class="chip">FN: Cleared + (dangerous miss)</span>
+        </div>
+        Tip: Missing a real knife (FN) is worse than a false alarm (FP). Watch how metrics respond as the base rate changes.
+      </div>
+    </div>
+
+    <!-- Right Legend -->
+    <div class="legend">
+      <div class="card">
+        <div class="lg-row"><span class="tag plus">+</span> <span>Ground truth: bag <b>has a knife</b></span></div>
+        <div class="lg-row"><span class="tag minus">–</span> <span>Ground truth: bag <b>has no knife</b></span></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div id="controls">
+      <div><b>Session</b></div>
+      <button id="new-round">New Round</button>
+      <button id="reset">Reset</button>
+      <div style="margin-top:6px; font-size:11px; color:#333">
+        Bags/Round: <span id="bags-per-round-label">16</span>
+      </div>
+    </div>
+
+    <!-- Decision Panel -->
+    <div id="decision" aria-live="polite">
+      <div class="opt"><span class="key">F</span> Flag (predict “knife”)</div>
+      <div class="opt"><span class="key">C</span> Clear (predict “no knife”)</div>
+    </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <!-- Results Modal -->
+    <div id="modal" aria-modal="true" role="dialog">
+      <div id="modal-content">
+        <h3>Round Complete</h3>
+        <div class="final-grid">
+          <div class="final-metric">Accuracy<br><b id="final-acc">0.00</b></div>
+          <div class="final-metric">Precision<br><b id="final-prec">0.00</b></div>
+          <div class="final-metric">Recall (TPR)<br><b id="final-rec">0.00</b></div>
+          <div class="final-metric">Specificity (TNR)<br><b id="final-spec">0.00</b></div>
+        </div>
+
+        <div class="cmatrix" style="margin-top:12px">
+          <table>
+            <thead>
+              <tr>
+                <th></th>
+                <th colspan="2">Actual</th>
+              </tr>
+              <tr>
+                <th>Predicted</th>
+                <th><span class="tag plus">+</span> Knife</th>
+                <th><span class="tag minus">–</span> No Knife</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><b>Flag</b></td>
+                <td id="mTP">0</td>
+                <td id="mFP">0</td>
+              </tr>
+              <tr>
+                <td><b>Clear</b></td>
+                <td id="mFN">0</td>
+                <td id="mTN">0</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="modal-actions">
+          <button id="close-modal">Close</button>
+          <button id="next-round">Next Round</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ---------- Canvas Setup ---------- */
+const canvas = document.getElementById('game-canvas');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== w || canvas.height !== h) {
+    canvas.width = w; canvas.height = h;
+  }
+}
+resizeCanvas(); addEventListener('resize', resizeCanvas);
+
+/* ---------- UI Elements ---------- */
+const ui = {
+  round: document.getElementById('round'),
+  knifeRate: document.getElementById('knife-rate'),
+  bagIdx: document.getElementById('bag-idx'),
+  bagTotal: document.getElementById('bag-total'),
+  tp: document.getElementById('tp'),
+  fp: document.getElementById('fp'),
+  tn: document.getElementById('tn'),
+  fn: document.getElementById('fn'),
+  acc: document.getElementById('acc'),
+  prec: document.getElementById('prec'),
+  rec: document.getElementById('rec'),
+  spec: document.getElementById('spec'),
+  toast: document.getElementById('toast'),
+  bagsPerRoundLabel: document.getElementById('bags-per-round-label'),
+  modal: document.getElementById('modal'),
+  finalAcc: document.getElementById('final-acc'),
+  finalPrec: document.getElementById('final-prec'),
+  finalRec: document.getElementById('final-rec'),
+  finalSpec: document.getElementById('final-spec'),
+  mTP: document.getElementById('mTP'),
+  mFP: document.getElementById('mFP'),
+  mFN: document.getElementById('mFN'),
+  mTN: document.getElementById('mTN'),
+};
+
+/* ---------- Game State ---------- */
+let round = 0;
+let bagsPerRound = 16;
+let knifeRate = 0.5; // randomized each round
+let idx = 0;
+
+let TP=0, FP=0, TN=0, FN=0;
+
+// Current bag object: { hasKnife: boolean, difficulty: 0..1 }
+let currentBag = null;
+
+/* ---------- Helpers ---------- */
+function randBetween(a,b){ return a + Math.random()*(b-a); }
+
+function toast(msg){
+  ui.toast.textContent = msg;
+  ui.toast.classList.add('show');
+  setTimeout(()=> ui.toast.classList.remove('show'), 1100);
+}
+
+function metrics(){
+  const P = TP + FN;      // actual positives
+  const N = TN + FP;      // actual negatives
+  const total = P + N || 1;
+
+  const acc = (TP + TN) / total;
+  const prec = TP + FP ? TP / (TP + FP) : 0;
+  const rec = P ? TP / P : 0;           // sensitivity
+  const spec = N ? TN / N : 0;          // specificity
+
+  return {acc, prec, rec, spec};
+}
+
+function updateUI(){
+  ui.round.textContent = round;
+  ui.knifeRate.textContent = Math.round(knifeRate*100) + '%';
+  ui.bagIdx.textContent = Math.min(idx, bagsPerRound);
+  ui.bagTotal.textContent = bagsPerRound;
+
+  ui.tp.textContent = TP;
+  ui.fp.textContent = FP;
+  ui.tn.textContent = TN;
+  ui.fn.textContent = FN;
+
+  const m = metrics();
+  ui.acc.textContent  = m.acc.toFixed(2);
+  ui.prec.textContent = m.prec.toFixed(2);
+  ui.rec.textContent  = m.rec.toFixed(2);
+  ui.spec.textContent = m.spec.toFixed(2);
+}
+
+function drawBackground(){
+  // conveyor stripes
+  const h = canvas.height;
+  const w = canvas.width;
+
+  const grad = ctx.createLinearGradient(0, 0, 0, h);
+  grad.addColorStop(0, '#0a0a2e');
+  grad.addColorStop(0.55, '#16213e');
+  grad.addColorStop(1, '#0f1419');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,w,h);
+
+  // subtle moving rollers (based on time)
+  const t = (performance.now()/1000);
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = '#6A77B2';
+  const step = 36;
+  for (let y= (t*40) % step; y< h; y += step){
+    ctx.fillRect(0, y, w, 6);
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawXrayBox(){
+  const w = Math.min(560, canvas.width*0.8);
+  const h = canvas.height*0.52;
+  const x = (canvas.width - w)/2;
+  const y = canvas.height*0.2;
+
+  // X-ray glow
+  ctx.save();
+  ctx.shadowColor = '#1E90FF';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = 'rgba(20, 120, 200, 0.08)';
+  ctx.fillRect(x, y, w, h);
+  ctx.restore();
+
+  // Border is via CSS .zone; we just draw interior
+  return {x,y,w,h};
+}
+
+function drawBag(bagBox){
+  // Bag position (centered)
+  const cx = bagBox.x + bagBox.w/2;
+  const cy = bagBox.y + bagBox.h/2 + Math.sin(performance.now()/200)*6;
+
+  // Bag outline
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,0.07)';
+  ctx.strokeStyle = '#C0C9E8';
+  ctx.lineWidth = 2;
+  roundedRect(cx-110, cy-70, 220, 140, 14);
+  ctx.fill(); ctx.stroke();
+
+  // Handle
+  roundedRect(cx-50, cy-110, 100, 26, 10);
+  ctx.fill(); ctx.stroke();
+
+  // X-ray contents hint (difficulty -> noisier)
+  const noise = Math.floor(8 + currentBag.difficulty*26);
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = 'rgba(100,180,255,0.15)';
+  for (let i=0;i<noise;i++){
+    const rx = randBetween(cx-85, cx+85);
+    const ry = randBetween(cy-50, cy+50);
+    const r  = randBetween(2, 8);
+    ctx.beginPath(); ctx.arc(rx, ry, r, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Glyph slot (revealed after decision)
+  if (revealTruth){
+    ctx.font = '700 42px "Roboto Mono", monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (currentBag.hasKnife){
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bluePlus').trim() || '#1E40FF';
+      ctx.fillText('+', cx, cy);
+    } else {
+      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--redMinus').trim() || '#cc3d3d';
+      ctx.fillText('–', cx, cy+2);
+    }
+  } else {
+    // subtle “?” while awaiting decision
+    ctx.globalAlpha = 0.6;
+    ctx.font = '700 28px "Roboto Mono", monospace';
+    ctx.fillStyle = '#C0C9E8';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText('?', cx, cy);
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.restore();
+}
+
+function roundedRect(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+
+/* ---------- Round / Bag Flow ---------- */
+let revealTruth = false;
+let awaitingDecision = false;
+
+function newRound(){
+  round++;
+  knifeRate = 0.2 + Math.random()*0.6; // 20% - 80% to show base-rate effects
+  idx = 0;
+  TP=FP=TN=FN=0;
+  ui.bagsPerRoundLabel.textContent = bagsPerRound.toString();
+  revealTruth = false;
+  awaitingDecision = false;
+  spawnBag();
+  updateUI();
+  toast(`Round ${round} • Knife rate ≈ ${Math.round(knifeRate*100)}%`);
+}
+
+function resetAll(){
+  round = 0;
+  newRound();
+}
+
+function spawnBag(){
+  if (idx >= bagsPerRound){
+    endRound();
+    return;
+  }
+  idx++;
+  revealTruth = false;
+  awaitingDecision = true;
+
+  // Random ground truth & difficulty
+  const hasKnife = Math.random() < knifeRate;
+  const difficulty = Math.random(); // higher = noisier
+  currentBag = { hasKnife, difficulty };
+  updateUI();
+}
+
+function decide(predictKnife){
+  if (!awaitingDecision) return;
+
+  awaitingDecision = false;
+  revealTruth = true;
+
+  // Update confusion counts
+  if (predictKnife && currentBag.hasKnife) TP++;
+  else if (predictKnife && !currentBag.hasKnife) FP++;
+  else if (!predictKnife && !currentBag.hasKnife) TN++;
+  else if (!predictKnife && currentBag.hasKnife) FN++;
+
+  updateUI();
+
+  // Feedback toast
+  if (predictKnife && currentBag.hasKnife) toast('TP — Correct catch');
+  else if (predictKnife && !currentBag.hasKnife) toast('FP — False alarm');
+  else if (!predictKnife && !currentBag.hasKnife) toast('TN — Correct rejection');
+  else toast('FN — Missed knife (dangerous)');
+
+  // Brief reveal, then next bag
+  setTimeout(()=> {
+    revealTruth = false;
+    spawnBag();
+  }, 650);
+}
+
+function endRound(){
+  // Fill modal metrics + matrix
+  const m = metrics();
+  ui.finalAcc.textContent  = m.acc.toFixed(2);
+  ui.finalPrec.textContent = m.prec.toFixed(2);
+  ui.finalRec.textContent  = m.rec.toFixed(2);
+  ui.finalSpec.textContent = m.spec.toFixed(2);
+
+  ui.mTP.textContent = TP;
+  ui.mFP.textContent = FP;
+  ui.mFN.textContent = FN;
+  ui.mTN.textContent = TN;
+
+  ui.modal.classList.add('show');
+}
+
+/* ---------- Render Loop ---------- */
+function loop(){
+  resizeCanvas();
+  drawBackground();
+  const box = drawXrayBox();
+  if (currentBag) drawBag(box);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+/* ---------- Events ---------- */
+document.getElementById('new-round').addEventListener('click', ()=>{ ui.modal.classList.remove('show'); newRound(); });
+document.getElementById('reset').addEventListener('click', ()=>{ ui.modal.classList.remove('show'); resetAll(); });
+document.getElementById('close-modal').addEventListener('click', ()=> ui.modal.classList.remove('show'));
+document.getElementById('next-round').addEventListener('click', ()=>{ ui.modal.classList.remove('show'); newRound(); });
+
+// Decision keys
+document.addEventListener('keydown', (e)=>{
+  if (e.key === 'f' || e.key === 'F') { e.preventDefault(); decide(true); }
+  if (e.key === 'c' || e.key === 'C') { e.preventDefault(); decide(false); }
+});
+
+// Clickable decision buttons (mirror the keys)
+const decision = document.getElementById('decision');
+const flagBtn = document.createElement('button');
+flagBtn.textContent = 'Flag (F)';
+flagBtn.addEventListener('click', ()=> decide(true));
+const clearBtn = document.createElement('button');
+clearBtn.textContent = 'Clear (C)';
+clearBtn.addEventListener('click', ()=> decide(false));
+decision.appendChild(flagBtn);
+decision.appendChild(clearBtn);
+
+/* ---------- Boot ---------- */
+newRound();
+</script>
+</body>
+</html>

@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blueprint | Classifier Game: Accuracy • Sensitivity • Specificity</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #1E40FF;
+            --accent: #1E40FF;
+            --muted: #6A77B2;
+            --edge: #C0C9E8;
+            --bg: #F0F4FF;
+            --paper: #FFFFFF;
+            --good: #1E40FF;
+            --bad: #cc3d3d;
+            --overlay: rgba(0,10,40,0.35);
+            --tp-color: #2e7d32;
+            --fp-color: #c62828;
+            --tn-color: #6A77B2;
+            --fn-color: #ff8f00;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            margin: 0;
+            background: var(--bg);
+            background-image: radial-gradient(var(--edge) 1px, transparent 1px);
+            background-size: 16px 16px;
+            color: var(--ink);
+            font-family: 'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            overflow-x: hidden;
+            overflow-y: auto;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        #main-container {
+            background: rgba(255,255,255,0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid var(--edge);
+            border-radius: 16px;
+            padding: 32px;
+            max-width: 1200px;
+            width: 100%;
+            margin: 0 auto;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+            transition: all 0.3s ease;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 0 0 16px 0;
+            color: var(--ink);
+            font-weight: 700;
+            font-size: 28px;
+            border-bottom: 2px solid var(--ink);
+            padding-bottom: 12px;
+        }
+
+        .instructions {
+            text-align: center;
+            margin-bottom: 24px;
+            line-height: 1.6;
+            color: var(--muted);
+            font-size: 14px;
+            background: rgba(255,255,255,0.6);
+            border: 1px solid var(--edge);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .instructions strong {
+            color: var(--ink);
+        }
+
+        #game-section {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        }
+
+        #board-container {
+            flex: 1;
+            min-width: 600px;
+        }
+
+        #game-board {
+            border: 2px solid var(--ink);
+            border-radius: 12px;
+            background: var(--paper);
+            cursor: crosshair;
+            display: block;
+            width: 100%;
+            height: 400px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.05);
+        }
+
+        #game-board:hover {
+            box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+        }
+
+        .sidebar {
+            flex: 0 0 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .panel {
+            background: rgba(255,255,255,0.6);
+            border: 1px solid var(--edge);
+            border-radius: 12px;
+            padding: 16px;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s ease;
+        }
+
+        .panel h3 {
+            margin: 0 0 12px 0;
+            color: var(--ink);
+            font-size: 14px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--edge);
+            padding-bottom: 8px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .stat-item {
+            background: rgba(255,255,255,0.8);
+            border: 1px solid var(--edge);
+            border-radius: 8px;
+            padding: 8px;
+            text-align: center;
+            font-size: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .stat-item.tp { border-color: var(--tp-color); }
+        .stat-item.fp { border-color: var(--fp-color); }
+        .stat-item.tn { border-color: var(--tn-color); }
+        .stat-item.fn { border-color: var(--fn-color); }
+
+        .stat-label {
+            color: var(--muted);
+            font-size: 10px;
+            display: block;
+        }
+
+        .stat-value {
+            color: var(--ink);
+            font-weight: 700;
+            font-size: 16px;
+            display: block;
+            margin-top: 2px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--edge);
+            border-radius: 3px;
+            overflow: hidden;
+            margin: 8px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--ink);
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .item-circle {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            stroke-width: 2px;
+            stroke: var(--ink);
+            fill: rgba(30,64,255,0.1);
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
+            cursor: pointer;
+        }
+
+        .item-circle.selectable:hover {
+            stroke: var(--accent);
+            stroke-width: 3px;
+            fill: rgba(30,64,255,0.2);
+            transform: scale(1.1);
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.15));
+        }
+        
+        .item-circle.selected {
+            fill: rgba(30,64,255,0.4);
+            stroke: var(--accent);
+            stroke-width: 3px;
+            transform: scale(1.05);
+        }
+
+        .item-circle.revealed {
+            animation: revealResult 0.4s ease-out;
+        }
+
+        @keyframes revealResult {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .inner-dot {
+            fill: var(--ink);
+            opacity: 0.6;
+            transition: all 0.2s ease;
+        }
+
+        .hint-dot {
+            fill: var(--accent);
+            opacity: 0.8;
+        }
+
+        .pulse-ring {
+            fill: none;
+            stroke: var(--ink);
+            stroke-width: 1;
+            opacity: 0;
+            animation: pulse 2s infinite ease-out;
+        }
+
+        @keyframes pulse {
+            0% {
+                opacity: 0.8;
+                transform: scale(1);
+            }
+            100% {
+                opacity: 0;
+                transform: scale(1.8);
+            }
+        }
+
+        #controls {
+            display: flex;
+            gap: 12px;
+            justify-content: center;
+            margin: 24px 0;
+            flex-wrap: wrap;
+        }
+
+        button {
+            font-family: 'Roboto Mono', monospace;
+            font-size: 14px;
+            font-weight: 700;
+            background: transparent;
+            color: var(--ink);
+            border: 1px solid var(--edge);
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        button:hover {
+            border-color: var(--ink);
+            background: rgba(255,255,255,0.8);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+        
+        button:disabled {
+            background: var(--edge);
+            color: var(--muted);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        button.primary {
+            background: var(--ink);
+            color: var(--paper);
+            border-color: var(--ink);
+        }
+
+        button.primary:hover {
+            background: var(--accent);
+            border-color: var(--accent);
+        }
+
+        #results-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+            opacity: 0;
+            transform: translateY(20px);
+            transition: all 0.4s ease;
+        }
+
+        #results-container.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .metric-card {
+            background: rgba(255,255,255,0.8);
+            border: 1px solid var(--edge);
+            border-radius: 12px;
+            padding: 20px;
+            backdrop-filter: blur(4px);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+
+        .metric-card h3 {
+            margin: 0 0 8px 0;
+            color: var(--ink);
+            font-size: 14px;
+            font-weight: 700;
+            border-bottom: 1px solid var(--edge);
+            padding-bottom: 8px;
+        }
+        
+        .metric-card .value {
+            font-size: 32px;
+            font-weight: 700;
+            text-align: right;
+            color: var(--ink);
+            margin: 12px 0;
+        }
+        
+        .metric-card .formula {
+            font-size: 12px;
+            color: var(--muted);
+            text-align: right;
+            margin-bottom: 12px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .metric-card p {
+            font-size: 12px;
+            line-height: 1.5;
+            margin: 0;
+            color: var(--muted);
+        }
+
+        .metric-card strong {
+            color: var(--ink);
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin: 16px 0;
+            font-size: 12px;
+            flex-wrap: wrap;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 0.3s ease;
+        }
+
+        .legend.show {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(255,255,255,0.8);
+            border: 1px solid var(--edge);
+            border-radius: 20px;
+            padding: 6px 12px;
+            backdrop-filter: blur(4px);
+        }
+
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid var(--edge);
+        }
+
+        .game-info {
+            font-size: 12px;
+            color: var(--muted);
+            line-height: 1.4;
+        }
+
+        .selected-count {
+            color: var(--ink);
+            font-weight: 700;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 12px;
+            }
+
+            #main-container {
+                padding: 20px;
+                margin-top: 0;
+            }
+
+            #game-section {
+                flex-direction: column;
+            }
+
+            .sidebar {
+                flex: none;
+                width: 100%;
+            }
+
+            #board-container {
+                min-width: auto;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+            
+            #results-container {
+                grid-template-columns: 1fr;
+            }
+            
+            .metric-card {
+                padding: 16px;
+            }
+            
+            .metric-card .value {
+                font-size: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="main-container">
+        <h1>Blueprint Classifier Game</h1>
+        <p class="instructions">
+            Each circle represents a data sample that could be either <strong>positive</strong> or <strong>negative</strong>.<br>
+            Click to select all circles you believe contain <strong>positive samples</strong>, then evaluate your classification performance.
+        </p>
+
+        <div id="game-section">
+            <div id="board-container">
+                <svg id="game-board" viewBox="0 0 800 400" preserveAspectRatio="xMidYMid meet"></svg>
+                
+                <div id="legend-container" class="legend" style="display: none;"></div>
+                
+                <div id="controls">
+                    <button id="check-button" class="primary">Evaluate Results</button>
+                    <button id="reset-button">New Classification Task</button>
+                    <button id="hint-button">Show Hint</button>
+                </div>
+            </div>
+
+            <div class="sidebar">
+                <div class="panel">
+                    <h3>Current Selection</h3>
+                    <div class="game-info">
+                        Selected: <span class="selected-count" id="selected-count">0</span> items<br>
+                        Total items: <span id="total-items">60</span><br>
+                        Actual positives: <span id="positive-count">15</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="selection-progress"></div>
+                    </div>
+                </div>
+
+                <div class="panel" id="confusion-matrix" style="display: none;">
+                    <h3>Confusion Matrix</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item tp">
+                            <span class="stat-label">TP</span>
+                            <span class="stat-value" id="tp-value">0</span>
+                        </div>
+                        <div class="stat-item fp">
+                            <span class="stat-label">FP</span>
+                            <span class="stat-value" id="fp-value">0</span>
+                        </div>
+                        <div class="stat-item fn">
+                            <span class="stat-label">FN</span>
+                            <span class="stat-value" id="fn-value">0</span>
+                        </div>
+                        <div class="stat-item tn">
+                            <span class="stat-label">TN</span>
+                            <span class="stat-value" id="tn-value">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="panel">
+                    <h3>About This Game</h3>
+                    <div class="game-info">
+                        Practice binary classification with no initial visual cues. Can you identify the positive samples? Use the hint if you need help!
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="results-container"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const config = {
+                boardWidth: 800,
+                boardHeight: 400,
+                numItems: 60,
+                positiveRatio: 0.25, // 25% are positive
+                itemRadius: 16,
+                padding: 40
+            };
+
+            let items = [];
+            let gameIsActive = true;
+            let hintShown = false;
+            let hintItems = []; // Subset of positive items to show as hints
+
+            const svgBoard = document.getElementById('game-board');
+            const checkButton = document.getElementById('check-button');
+            const resetButton = document.getElementById('reset-button');
+            const hintButton = document.getElementById('hint-button');
+            const resultsContainer = document.getElementById('results-container');
+            const legendContainer = document.getElementById('legend-container');
+            const confusionMatrix = document.getElementById('confusion-matrix');
+            
+            // UI elements
+            const selectedCountEl = document.getElementById('selected-count');
+            const totalItemsEl = document.getElementById('total-items');
+            const positiveCountEl = document.getElementById('positive-count');
+            const selectionProgress = document.getElementById('selection-progress');
+
+            function generateItems() {
+                items = [];
+                const numPositives = Math.floor(config.numItems * config.positiveRatio);
+                
+                for (let i = 0; i < config.numItems; i++) {
+                    items.push({
+                        x: 0, y: 0, // Will be set by positioning algorithm
+                        isPositive: i < numPositives,
+                        isSelected: false,
+                        id: i
+                    });
+                }
+                
+                // Shuffle to randomize positions
+                for (let i = items.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [items[i], items[j]] = [items[j], items[i]];
+                }
+                
+                // Position items using improved force-directed layout
+                for (let i = 0; i < items.length; i++) {
+                    let attempts = 0;
+                    let placed = false;
+                    while (!placed && attempts < 1000) {
+                        items[i].x = Math.random() * (config.boardWidth - config.padding * 2) + config.padding;
+                        items[i].y = Math.random() * (config.boardHeight - config.padding * 2) + config.padding;
+                        
+                        let overlap = false;
+                        for (let j = 0; j < i; j++) {
+                            const dx = items[i].x - items[j].x;
+                            const dy = items[i].y - items[j].y;
+                            const distance = Math.sqrt(dx * dx + dy * dy);
+                            if (distance < config.itemRadius * 2.8) {
+                                overlap = true;
+                                break;
+                            }
+                        }
+                        if (!overlap) placed = true;
+                        attempts++;
+                    }
+                }
+                
+                // Update UI
+                totalItemsEl.textContent = config.numItems;
+                positiveCountEl.textContent = numPositives;
+                updateSelectionDisplay();
+                
+                // Create hint subset (show about 30% of positives as hints)
+                const positiveItems = items.filter(item => item.isPositive);
+                const hintCount = Math.ceil(positiveItems.length * 0.3);
+                hintItems = positiveItems.sort(() => Math.random() - 0.5).slice(0, hintCount);
+            }
+
+            function renderItems() {
+                svgBoard.innerHTML = '';
+                items.forEach((item, index) => {
+                    const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                    group.setAttribute('transform', `translate(${item.x}, ${item.y})`);
+                    group.dataset.index = index;
+                    group.style.cursor = 'pointer';
+
+                    // Main circle - no visual indicators of positive/negative during gameplay
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('r', config.itemRadius);
+                    circle.setAttribute('class', 'item-circle selectable');
+                    
+                    group.appendChild(circle);
+                    group.addEventListener('click', () => handleItemClick(index));
+                    svgBoard.appendChild(group);
+                });
+            }
+
+            function handleItemClick(index) {
+                if (!gameIsActive) return;
+                
+                items[index].isSelected = !items[index].isSelected;
+                const group = svgBoard.querySelector(`g[data-index='${index}']`);
+                const circle = group.querySelector('.item-circle');
+                circle.classList.toggle('selected', items[index].isSelected);
+                
+                updateSelectionDisplay();
+            }
+
+            function updateSelectionDisplay() {
+                const selectedCount = items.filter(item => item.isSelected).length;
+                selectedCountEl.textContent = selectedCount;
+                
+                const progressPercent = (selectedCount / config.numItems) * 100;
+                selectionProgress.style.width = `${progressPercent}%`;
+            }
+
+            function showHint() {
+                hintShown = true;
+                hintButton.textContent = 'Hint Shown';
+                hintButton.disabled = true;
+                
+                // Show hints for only a subset of positive items
+                hintItems.forEach(hintItem => {
+                    const index = items.indexOf(hintItem);
+                    const group = svgBoard.querySelector(`g[data-index='${index}']`);
+                    
+                    // Add hint dot
+                    const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    dot.setAttribute('r', config.itemRadius / 4);
+                    dot.setAttribute('class', 'inner-dot hint-dot');
+                    dot.style.opacity = '0';
+                    group.appendChild(dot);
+                    
+                    // Animate hint appearance
+                    setTimeout(() => {
+                        dot.style.opacity = '0.8';
+                        dot.style.animation = 'pulse 1s ease-in-out 3';
+                    }, 100);
+                });
+            }
+
+            function checkResults() {
+                if (!gameIsActive) return;
+                
+                const selectedCount = items.filter(item => item.isSelected).length;
+                
+                // Warning for no selections
+                if (selectedCount === 0) {
+                    if (!confirm("You haven't selected any items. This will demonstrate the 'accuracy paradox' where you can get high accuracy by always predicting the majority class. Continue?")) {
+                        return;
+                    }
+                }
+                
+                gameIsActive = false;
+                checkButton.disabled = true;
+
+                let TP = 0, FP = 0, TN = 0, FN = 0;
+
+                items.forEach((item, index) => {
+                    const group = svgBoard.querySelector(`g[data-index='${index}']`);
+                    const circle = group.querySelector('.item-circle');
+                    circle.classList.remove('selectable');
+                    circle.classList.add('revealed');
+
+                    let resultColor, strokeColor;
+                    
+                    if (item.isPositive && item.isSelected) {
+                        TP++;
+                        resultColor = 'var(--tp-color)';
+                        strokeColor = 'var(--tp-color)';
+                    } else if (!item.isPositive && item.isSelected) {
+                        FP++;
+                        resultColor = 'var(--fp-color)';
+                        strokeColor = 'var(--fp-color)';
+                    } else if (!item.isPositive && !item.isSelected) {
+                        TN++;
+                        resultColor = 'rgba(106,119,178,0.2)';
+                        strokeColor = 'var(--tn-color)';
+                    } else if (item.isPositive && !item.isSelected) {
+                        FN++;
+                        resultColor = 'var(--fn-color)';
+                        strokeColor = 'var(--fn-color)';
+                    }
+
+                    // Animate color change and add indicators
+                    setTimeout(() => {
+                        circle.style.fill = resultColor;
+                        circle.style.stroke = strokeColor;
+                        circle.style.strokeWidth = '2px';
+                        
+                        // Add inner dot for all positives after evaluation
+                        if (item.isPositive && !group.querySelector('.inner-dot')) {
+                            const dot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            dot.setAttribute('r', config.itemRadius / 4);
+                            dot.setAttribute('class', 'inner-dot');
+                            dot.style.opacity = '0.8';
+                            group.appendChild(dot);
+                        }
+                        
+                        // Add pulse ring for positives after evaluation
+                        if (item.isPositive && !group.querySelector('.pulse-ring')) {
+                            const pulseRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                            pulseRing.setAttribute('r', config.itemRadius);
+                            pulseRing.setAttribute('class', 'pulse-ring');
+                            pulseRing.style.animationDelay = `${Math.random() * 2}s`;
+                            group.insertBefore(pulseRing, circle);
+                        }
+                    }, index * 20); // Stagger animations
+                });
+
+                const total = items.length;
+                const actualPositives = TP + FN;
+                const actualNegatives = TN + FP;
+
+                const accuracy = total > 0 ? (TP + TN) / total : 0;
+                const sensitivity = actualPositives > 0 ? TP / actualPositives : 0;
+                const specificity = actualNegatives > 0 ? TN / actualNegatives : 0;
+
+                // Update confusion matrix
+                document.getElementById('tp-value').textContent = TP;
+                document.getElementById('fp-value').textContent = FP;
+                document.getElementById('fn-value').textContent = FN;
+                document.getElementById('tn-value').textContent = TN;
+                confusionMatrix.style.display = 'block';
+
+                setTimeout(() => {
+                    displayResults({ TP, FP, TN, FN, accuracy, sensitivity, specificity });
+                    displayLegend();
+                }, 500);
+            }
+            
+            function displayLegend() {
+                legendContainer.style.display = 'flex';
+                legendContainer.innerHTML = `
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: var(--tp-color);"></div>
+                        True Positive (TP)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: var(--fp-color);"></div>
+                        False Positive (FP)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: var(--fn-color);"></div>
+                        False Negative (FN)
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: rgba(106,119,178,0.2); border-color: var(--tn-color);"></div>
+                        True Negative (TN)
+                    </div>
+                `;
+                
+                setTimeout(() => {
+                    legendContainer.classList.add('show');
+                }, 100);
+            }
+
+            function displayResults(metrics) {
+                const selectedCount = items.filter(item => item.isSelected).length;
+                const isLowSelection = selectedCount < metrics.TP + metrics.FN * 0.3; // Selected less than 30% of actual positives
+                
+                let accuracyNote = '';
+                if (selectedCount === 0) {
+                    accuracyNote = '<div style="background: rgba(255,143,0,0.1); border: 1px solid #ff8f00; border-radius: 8px; padding: 8px; margin-top: 8px; font-size: 11px;"><strong>Note:</strong> High accuracy with no selections demonstrates the "accuracy paradox" - you got most items "right" by correctly not selecting negatives, but missed all positives!</div>';
+                } else if (isLowSelection) {
+                    accuracyNote = '<div style="background: rgba(255,143,0,0.1); border: 1px solid #ff8f00; border-radius: 8px; padding: 8px; margin-top: 8px; font-size: 11px;"><strong>Note:</strong> High accuracy with few selections can be misleading in imbalanced datasets.</div>';
+                }
+
+                resultsContainer.innerHTML = `
+                    <div class="metric-card">
+                        <h3>Accuracy</h3>
+                        <div class="value">${(metrics.accuracy * 100).toFixed(1)}%</div>
+                        <div class="formula">(TP+TN)/Total = (${metrics.TP}+${metrics.TN})/${items.length}</div>
+                        <p><strong>Overall Classification Performance:</strong> This measures your total correct classifications (both true positives and true negatives) out of all items.</p>
+                        ${accuracyNote}
+                    </div>
+                    <div class="metric-card">
+                        <h3>Sensitivity (Recall)</h3>
+                        <div class="value">${(metrics.sensitivity * 100).toFixed(1)}%</div>
+                        <div class="formula">TP/(TP+FN) = ${metrics.TP}/(${(metrics.TP + metrics.FN)})</div>
+                        <p><strong>True Positive Rate:</strong> Of all actual positives, how many did you correctly identify? High sensitivity means few missed positives.</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Specificity</h3>
+                        <div class="value">${(metrics.specificity * 100).toFixed(1)}%</div>
+                        <div class="formula">TN/(TN+FP) = ${metrics.TN}/(${(metrics.TN + metrics.FP)})</div>
+                        <p><strong>True Negative Rate:</strong> Of all actual negatives, how many did you correctly ignore? High specificity means few false alarms.</p>
+                    </div>
+                    <div class="metric-card">
+                        <h3>Selection Summary</h3>
+                        <div class="value">${selectedCount}/${items.length}</div>
+                        <div class="formula">You selected ${selectedCount} items out of ${items.length} total</div>
+                        <p><strong>Selection Strategy:</strong> You selected ${((selectedCount/items.length)*100).toFixed(1)}% of all items. The actual positive rate is ${((metrics.TP + metrics.FN)/items.length*100).toFixed(1)}%.</p>
+                    </div>
+                `;
+                
+                setTimeout(() => {
+                    resultsContainer.classList.add('show');
+                }, 200);
+            }
+
+            function resetGame() {
+                gameIsActive = true;
+                hintShown = false;
+                hintItems = [];
+                checkButton.disabled = false;
+                hintButton.disabled = false;
+                hintButton.textContent = 'Show Hint';
+                
+                resultsContainer.classList.remove('show');
+                legendContainer.classList.remove('show');
+                confusionMatrix.style.display = 'none';
+                
+                setTimeout(() => {
+                    resultsContainer.innerHTML = '';
+                    legendContainer.innerHTML = '';
+                    legendContainer.style.display = 'none';
+                }, 300);
+                
+                generateItems();
+                renderItems();
+            }
+
+            // Event listeners
+            checkButton.addEventListener('click', checkResults);
+            resetButton.addEventListener('click', resetGame);
+            hintButton.addEventListener('click', showHint);
+
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !checkButton.disabled) {
+                    checkResults();
+                } else if (e.key === 'r' || e.key === 'R') {
+                    resetGame();
+                } else if (e.key === 'h' || e.key === 'H') {
+                    if (!hintButton.disabled) showHint();
+                }
+            });
+
+            // Initial setup
+            resetGame();
+        });
+    </script>
+</body>
+</html>
