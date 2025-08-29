@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Precision vs. Recall</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 2rem 2rem 1.5rem 2rem;
+            text-align: center;
+        }
+        .controls {
+            margin-top: 1.5rem;
+            font-family: 'SF Mono', 'Menlo', 'Monaco', monospace;
+        }
+        .slider {
+            width: 300px;
+            cursor: pointer;
+        }
+        .label-text {
+             font-size: 12px;
+             color: #666;
+             margin: 0 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <svg width="600" height="450" viewBox="0 0 600 450" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <pattern id="grid" width="15" height="15" patternUnits="userSpaceOnUse">
+                    <circle cx="1" cy="1" r="0.7" fill="#e8e8f0" />
+                </pattern>
+            </defs>
+            
+            <rect width="100%" height="100%" fill="#f8f8fa"/>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+
+            <style>
+                .title { font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 22px; font-weight: 500; fill: #0033cc; text-anchor: middle; }
+                .label { font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 16px; fill: #2962ff; text-anchor: middle; }
+                .desc { font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 12px; fill: #555; text-anchor: middle; }
+                
+                .data-point { transition: opacity 0.3s ease; } /* Removed transform from transition */
+                .positive { fill: #2962ff; }
+                .negative { fill: #b0b0c0; }
+                
+                .selection-circle { 
+                    fill: rgba(41, 98, 255, 0.1); 
+                    stroke: #2962ff; 
+                    stroke-width: 2; 
+                    stroke-dasharray: 6 4;
+                    transition: r 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+                }
+                .data-point.selected {
+                    /* transform: scale(1.5); <-- This line was removed */
+                    opacity: 1;
+                }
+                 .data-point:not(.selected) {
+                    opacity: 0.7;
+                }
+            </style>
+
+            <text x="300" y="40" class="title">Precision-Recall Trade-off</text>
+            <text x="300" y="65" class="desc">Adjust the slider to change the model's selection threshold.</text>
+
+            <!-- Data Points are placed in a group for easier manipulation -->
+            <g id="data-points-container" transform="translate(100, 20)">
+                <!-- Positives (Blue Circles) -->
+                <circle class="data-point positive" cx="130" cy="200" r="6"/> <circle class="data-point positive" cx="160" cy="180" r="6"/>
+                <circle class="data-point positive" cx="140" cy="240" r="6"/> <circle class="data-point positive" cx="250" cy="150" r="6"/>
+                <circle class="data-point positive" cx="300" cy="300" r="6"/> <circle class="data-point positive" cx="90" cy="350" r="6"/>
+                <circle class="data-point positive" cx="210" cy="100" r="6"/>
+                <!-- Negatives (Grey Circles) -->
+                <circle class="data-point negative" cx="60" cy="150" r="6"/> <circle class="data-point negative" cx="190" cy="260" r="6"/>
+                <circle class="data-point negative" cx="280" cy="210" r="6"/> <circle class="data-point negative" cx="110" cy="300" r="6"/>
+                <circle class="data-point negative" cx="350" cy="120" r="6"/> <circle class="data-point negative" cx="230" cy="340" r="6"/>
+                <circle class="data-point negative" cx="330" cy="260" r="6"/> <circle class="data-point negative" cx="180" cy="140" r="6"/>
+            </g>
+
+            <!-- The interactive selection circle -->
+            <circle id="selection-circle" class="selection-circle" cx="300" cy="240" r="45"/>
+
+            <!-- Dynamic Text Labels -->
+            <text x="150" y="420" class="label">Precision: <tspan id="precision-value" font-weight="bold">1.00</tspan></text>
+            <text x="450" y="420" class="label">Recall: <tspan id="recall-value" font-weight="bold">0.43</tspan></text>
+        </svg>
+
+        <div class="controls">
+            <span class="label-text">High Precision</span>
+            <input type="range" min="20" max="220" value="45" class="slider" id="threshold-slider">
+            <span class="label-text">High Recall</span>
+        </div>
+    </div>
+
+    <script>
+        // Get references to the DOM elements we'll be interacting with
+        const slider = document.getElementById('threshold-slider');
+        const selectionCircle = document.getElementById('selection-circle');
+        const precisionValue = document.getElementById('precision-value');
+        const recallValue = document.getElementById('recall-value');
+        const dataPoints = document.querySelectorAll('.data-point');
+        
+        // Store data points' information in a more accessible format
+        const points = [];
+        const container = document.getElementById('data-points-container');
+        const containerTransform = container.transform.baseVal.getItem(0).matrix;
+
+        dataPoints.forEach(p => {
+            points.push({
+                el: p,
+                // Apply the group's transform to get the absolute coordinates within the SVG
+                x: p.cx.baseVal.value + containerTransform.e,
+                y: p.cy.baseVal.value + containerTransform.f,
+                isPositive: p.classList.contains('positive')
+            });
+        });
+
+        const totalPositives = points.filter(p => p.isPositive).length;
+        const circleCenterX = selectionCircle.cx.baseVal.value;
+        const circleCenterY = selectionCircle.cy.baseVal.value;
+
+        function updateVisualization() {
+            const radius = parseFloat(slider.value);
+            
+            // Animate the circle's radius
+            selectionCircle.setAttribute('r', radius);
+
+            let truePositives = 0;
+            let falsePositives = 0;
+
+            // Determine which points are inside the circle
+            points.forEach(point => {
+                const distance = Math.sqrt(Math.pow(point.x - circleCenterX, 2) + Math.pow(point.y - circleCenterY, 2));
+                
+                if (distance <= radius) {
+                    point.el.classList.add('selected');
+                    if (point.isPositive) {
+                        truePositives++;
+                    } else {
+                        falsePositives++;
+                    }
+                } else {
+                    point.el.classList.remove('selected');
+                }
+            });
+
+            // Calculate Precision and Recall
+            // Precision = TP / (TP + FP)
+            // Recall = TP / (TP + FN) = TP / (Total Actual Positives)
+            
+            const precision = (truePositives + falsePositives > 0) ? truePositives / (truePositives + falsePositives) : 1.0; // Avoid division by zero
+            const recall = totalPositives > 0 ? truePositives / totalPositives : 0.0; // Avoid division by zero
+
+            // Update the text labels
+            precisionValue.textContent = precision.toFixed(2);
+            recallValue.textContent = recall.toFixed(2);
+        }
+
+        // Add event listener to the slider
+        slider.addEventListener('input', updateVisualization);
+
+        // Initial call to set the visualization based on the slider's default value
+        updateVisualization();
+    </script>
+</body>
+</html>
