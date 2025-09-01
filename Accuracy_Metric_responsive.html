@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Accuracy Metric Visualization - Blueprint Style</title>
+    <style>
+        /*
+         * This style is inspired by the clean, technical aesthetic of the provided image.
+         * It uses a limited color palette, a monospaced font, and a dot-grid background
+         * to create a "blueprint" or "schematic" feel.
+        */
+        :root {
+            --main-color: #2962ff;      /* A strong blue for primary elements and text */
+            --secondary-color: #9e9e9e; /* A neutral grey for secondary/error elements */
+            --bg-color: #f0f4ff;        /* A very light blue-grey for the background */
+            --dot-color: #d0d8e8;       /* The color of the grid dots */
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: var(--bg-color);
+            /* The dot-grid pattern, created with a radial gradient */
+            background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+            background-size: 15px 15px;
+        }
+    
+/* Responsive Adjustments */
+svg {
+  max-width: 100%;
+  height: auto;
+}
+@media (max-width: 768px) {
+  body {
+    padding: 10px;
+    align-items: flex-start;
+  }
+  svg text {
+    font-size: 14px;
+  }
+}
+@media (max-width: 480px) {
+  svg text {
+    font-size: 12px;
+  }
+}
+
+</style>
+</head>
+<body>
+
+<svg width="800" height="600" viewBox="0 0 800 600">
+    <!-- Title -->
+    <text x="400" y="40" font-size="24" text-anchor="middle" fill="var(--main-color)">The Accuracy Metric</text>
+    
+    <!-- Definition -->
+    <text x="400" y="75" font-size="16" text-anchor="middle" fill="var(--main-color)">
+        Definition: The proportion of correct predictions over total predictions.
+    </text>
+
+    <!-- Confusion Matrix Grid -->
+    <g id="confusion-matrix">
+        <!-- Axis Labels -->
+        <text x="400" y="130" font-size="16" text-anchor="middle" fill="var(--main-color)">Predicted Class</text>
+        <text x="225" y="325" font-size="16" text-anchor="middle" transform="rotate(-90, 150, 355)" fill="var(--main-color)">Actual Class</text>
+
+        <!-- Class Labels -->
+        <text x="325" y="160" font-size="14" text-anchor="middle" fill="var(--main-color)">Positive</text>
+        <text x="475" y="160" font-size="14" text-anchor="middle" fill="var(--main-color)">Negative</text>
+        <text x="210" y="225" font-size="14" text-anchor="end" fill="var(--main-color)">Positive</text>
+        <text x="210" y="325" font-size="14" text-anchor="end" fill="var(--main-color)">Negative</text>
+
+        <!-- TP Cell (Correct) -->
+        <rect x="250" y="175" width="150" height="100" fill="none" stroke="var(--main-color)" stroke-width="2.5"/>
+        <text x="325" y="210" font-size="20" text-anchor="middle" fill="var(--main-color)">TP</text>
+        <text x="325" y="240" font-size="12" text-anchor="middle" fill="var(--main-color)">True Positive</text>
+
+        <!-- FN Cell (Incorrect) -->
+        <rect x="400" y="175" width="150" height="100" fill="none" stroke="var(--secondary-color)" stroke-width="2" stroke-dasharray="5,5"/>
+        <text x="475" y="210" font-size="20" text-anchor="middle" fill="var(--secondary-color)">FN</text>
+        <text x="475" y="240" font-size="12" text-anchor="middle" fill="var(--secondary-color)">False Negative</text>
+
+        <!-- FP Cell (Incorrect) -->
+        <rect x="250" y="275" width="150" height="100" fill="none" stroke="var(--secondary-color)" stroke-width="2" stroke-dasharray="5,5"/>
+        <text x="325" y="310" font-size="20" text-anchor="middle" fill="var(--secondary-color)">FP</text>
+        <text x="325" y="340" font-size="12" text-anchor="middle" fill="var(--secondary-color)">False Positive</text>
+
+        <!-- TN Cell (Correct) -->
+        <rect x="400" y="275" width="150" height="100" fill="none" stroke="var(--main-color)" stroke-width="2.5"/>
+        <text x="475" y="310" font-size="20" text-anchor="middle" fill="var(--main-color)">TN</text>
+        <text x="475" y="340" font-size="12" text-anchor="middle" fill="var(--main-color)">True Negative</text>
+    </g>
+
+    <!-- Formula Section -->
+    <g id="formula" font-family="monospace" font-size="22">
+        <text x="150" y="470" text-anchor="middle" fill="var(--main-color)">Accuracy =</text>
+        
+        <!-- Numerator -->
+        <g id="numerator">
+            <text x="325" y="450" fill="var(--main-color)">TP</text>
+            <text x="375" y="450" fill="var(--main-color)">+</text>
+            <text x="425" y="450" fill="var(--main-color)">TN</text>
+        </g>
+
+        <!-- Fraction Line -->
+        <line x1="250" y1="470" x2="550" y2="470" stroke="var(--main-color)" stroke-width="2"/>
+
+        <!-- Denominator -->
+        <g id="denominator">
+            <text x="270" y="495" fill="var(--main-color)">TP</text>
+            <text x="310" y="495" fill="var(--main-color)">+</text>
+            <text x="350" y="495" fill="var(--secondary-color)">FP</text>
+            <text x="390" y="495" fill="var(--main-color)">+</text>
+            <text x="430" y="495" fill="var(--secondary-color)">FN</text>
+            <text x="470" y="495" fill="var(--main-color)">+</text>
+            <text x="510" y="495" fill="var(--main-color)">TN</text>
+        </g>
+    </g>
+
+   
+
+</svg>
+
+</body>
+</html>

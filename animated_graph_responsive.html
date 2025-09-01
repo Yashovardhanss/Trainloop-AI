@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Accuracy — Blueprint Theme (Balanced Data)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink:#1E40FF; --accent:#1E40FF; --muted:#6A77B2;
+    --panel:#F0F4FF; --edge:#C0C9E8; --bg:#F0F4FF; --paper:#FFFFFF;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0; background-color:var(--bg);
+    background-image:radial-gradient(var(--edge) 1px, transparent 1px);
+    background-size:16px 16px;
+    color:var(--ink);
+    font-family:'Roboto Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    display:grid; place-items:center; padding:16px;
+  }
+  .frame{
+    width:min(980px,95vw);
+    display:grid; gap:16px;
+    grid-template-columns:1fr 1fr;
+    grid-template-areas:
+      "plot panel"
+      "note note";
+  }
+  .card{
+    background:rgba(255,255,255,0.4);
+    border:1px solid var(--edge);
+    border-radius:14px;
+    padding:14px;
+    backdrop-filter:blur(2px);
+  }
+  /* PLOT centered within its card */
+  .plot{grid-area:plot; display:flex; align-items:center; justify-content:center;}
+  .plot svg{max-width:620px; width:100%; height:auto; display:block}
+  .panel{grid-area:panel; display:grid; gap:12px}
+  .note{grid-area:note; font-size:12px; color:var(--muted); line-height:1.5}
+
+  .controls{display:grid; gap:10px}
+  .control{background:transparent; border:1px solid var(--edge); border-radius:10px; padding:10px; display:grid; gap:8px}
+  .label{font-size:12px; color:var(--muted)}
+  .chipwrap{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+  .chip{border:1px solid var(--edge); border-radius:10px; padding:8px 10px; font-size:12px; display:flex; justify-content:space-between; align-items:center}
+  .chip b{font-weight:700}
+
+  /* Sliders (center the knob on track) */
+  input[type="range"]{ -webkit-appearance:none; appearance:none; width:100%; height:14px; background:transparent; outline:none }
+  input[type="range"]::-webkit-slider-runnable-track{ height:2px; background:var(--edge); border-radius:2px }
+  input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:14px; height:14px; border-radius:50%;
+    background:var(--paper); border:2px solid var(--ink); cursor:pointer;
+    margin-top:-6px; /* centers on 2px track */
+  }
+  input[type="range"]::-moz-range-track{ height:2px; background:var(--edge); border:none; border-radius:2px }
+  input[type="range"]::-moz-range-thumb{
+    width:14px; height:14px; border-radius:50%;
+    background:var(--paper); border:2px solid var(--ink); cursor:pointer;
+  }
+
+  button{
+    font-family:inherit; font-size:12px;
+    background:transparent; color:var(--ink); border:1px solid var(--edge);
+    padding:8px 12px; border-radius:10px; cursor:pointer; transition:.2s;
+  }
+  button:hover{border-color:var(--ink); background:rgba(255,255,255,0.5)}
+
+  .mini h4{margin:0 0 6px 0; font-size:12px; color:var(--muted)}
+  .matrix{ display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:12px; align-items:center }
+  .cell{ border:1px solid var(--ink); border-radius:10px; padding:10px; display:flex; flex-direction:column; gap:4px; min-height:56px }
+  .tag{font-size:10px; color:var(--muted)}
+  .val{font-weight:700}
+  .orange{color:var(--accent)}
+  .grey{color:var(--ink); opacity:.75}
+
+  /* Streamlined Animation card (same width, single row, airy) */
+  .anim-card{ padding:10px }
+  .anim-row{ display:flex; align-items:center; justify-content:space-between; gap:12px }
+  .anim-label{ font-size:12px; color:var(--muted) }
+  .anim-buttons{ display:flex; gap:8px }
+
+@media (max-width: 768px) {
+  .frame {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "plot"
+      "panel"
+      "note";
+  }
+
+  .plot svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .chipwrap {
+    grid-template-columns: 1fr; /* stack chips vertically */
+  }
+
+  .matrix {
+    grid-template-columns: repeat(2, 1fr); /* better fit */
+  }
+}
+
+</style>
+</head>
+<body>
+  <div class="frame">
+    <!-- Title removed -->
+
+    <!-- PLOT -->
+    <div class="card plot">
+      <svg id="plot" viewBox="0 0 640 420" aria-labelledby="t">
+        <title id="t">Accuracy plot</title>
+        <defs>
+          <marker id="arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+            <path d="M0,0 L6,3 L0,6 Z" fill="var(--ink)"/>
+          </marker>
+        </defs>
+
+        <!-- axes -->
+        <g stroke="var(--ink)" stroke-width="1">
+          <line x1="80" y1="40" x2="80" y2="360"/>
+          <line x1="80" y1="360" x2="580" y2="360"/>
+          <line x1="80" y1="40" x2="80" y2="34" marker-end="url(#arrow)"/>
+          <line x1="580" y1="360" x2="586" y2="360" marker-end="url(#arrow)"/>
+        </g>
+
+        <!-- axis labels -->
+        <g font-size="12" fill="var(--muted)">
+          <text x="24" y="200" text-anchor="middle" transform="rotate(-90 24 200)">Sensitivity (TPR)</text>
+          <text x="330" y="420" text-anchor="middle">Specificity (TNR)</text>
+        </g>
+
+        <!-- tick labels -->
+        <g font-size="11" fill="var(--muted)">
+          <text x="68" y="360">0.0</text>
+          <text x="68" y="290">0.25</text>
+          <text x="68" y="220">0.50</text>
+          <text x="68" y="150">0.75</text>
+          <text x="68" y="80">1.0</text>
+
+          <text x="80"  y="376" text-anchor="middle">0.0</text>
+          <text x="185" y="376" text-anchor="middle">0.25</text>
+          <text x="290" y="376" text-anchor="middle">0.50</text>
+          <text x="395" y="376" text-anchor="middle">0.75</text>
+          <text x="500" y="376" text-anchor="middle">1.0</text>
+        </g>
+
+        <!-- live point + guides -->
+        <line id="hGuide" stroke="var(--ink)" stroke-dasharray="3 6" opacity=".8"/>
+        <line id="vGuide" stroke="var(--ink)" stroke-dasharray="3 6" opacity=".8"/>
+        <circle id="pt" r="6" stroke="var(--ink)" fill="var(--ink)"/>
+
+        <!-- center readout -->
+        <text id="center" x="330" y="212" font-size="18" fill="var(--ink)" text-anchor="middle">
+          Accuracy = 0.00
+        </text>
+      </svg>
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="panel">
+      <div class="card mini">
+        <h4>Definition</h4>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5">
+          <b>Accuracy</b> = (TP + TN) / (TP + FP + FN + TN).  
+          With balanced data (π ≈ 0.5), Accuracy ≈ 0.5·TPR + 0.5·TNR.
+        </div>
+      </div>
+
+      <div class="chipwrap">
+        <div class="chip"><span>TPR</span><b id="tprVal">0.70</b></div>
+        <div class="chip"><span>TNR</span><b id="tnrVal">0.80</b></div>
+        <div class="chip"><span>Accuracy</span><b id="accVal">0.75</b></div>
+      </div>
+
+      <div class="card mini">
+        <h4>Confusion Matrix (N = 100, π = 0.5)</h4>
+        <div class="matrix">
+          <div></div>
+          <div class="tag">Pred +</div>
+          <div class="tag">Pred −</div>
+
+          <div class="tag">Actual +</div>
+          <div class="cell">
+            <div class="tag orange">TP</div>
+            <div class="val" id="TP">—</div>
+          </div>
+          <div class="cell">
+            <div class="tag grey">FN</div>
+            <div class="val" id="FN">—</div>
+          </div>
+
+          <div class="tag">Actual −</div>
+          <div class="cell">
+            <div class="tag grey">FP</div>
+            <div class="val" id="FP">—</div>
+          </div>
+          <div class="cell">
+            <div class="tag orange">TN</div>
+            <div class="val" id="TN">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Streamlined Animation card (same width, airy, buttons inline) -->
+      <div class="card anim-card">
+        <div class="anim-row">
+          <div class="anim-label">Animation</div>
+          <div class="anim-buttons">
+            <button id="playBtn">▶ Play</button>
+            <button id="resetBtn">↺ Reset</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      Move the sliders—or hit <b>Play</b>. The point is at (TNR on x, TPR on y). Accuracy is highest near the top-right corner (both high).
+    </div>
+  </div>
+
+<script>
+  // Elements
+  const svg = document.getElementById('plot');
+  const pt = document.getElementById('pt');
+  const hGuide = document.getElementById('hGuide');
+  const vGuide = document.getElementById('vGuide');
+  const center = document.getElementById('center');
+
+  const tprVal = document.getElementById('tprVal');
+  const tnrVal = document.getElementById('tnrVal');
+  const accVal = document.getElementById('accVal');
+
+  // Create sliders (kept from original structure)
+  const controlsContainer = document.createElement('div');
+  controlsContainer.className = 'controls';
+  controlsContainer.style.marginTop = '0'; // compact
+  const sliderCard1 = document.createElement('div');
+  sliderCard1.className = 'control';
+  sliderCard1.innerHTML = `
+    <div class="label">Sensitivity (TPR)</div>
+    <input id="tprSlider" type="range" min="0" max="1" step="0.01" value="0.70">
+  `;
+  const sliderCard2 = document.createElement('div');
+  sliderCard2.className = 'control';
+  sliderCard2.innerHTML = `
+    <div class="label">Specificity (TNR)</div>
+    <input id="tnrSlider" type="range" min="0" max="1" step="0.01" value="0.80">
+  `;
+  // Insert sliders just above the Confusion Matrix card for the same visual order as before
+  const panel = document.querySelector('.panel');
+  panel.insertBefore(controlsContainer, panel.children[2]);
+  controlsContainer.appendChild(sliderCard1);
+  controlsContainer.appendChild(sliderCard2);
+
+  const tprSlider = document.getElementById('tprSlider');
+  const tnrSlider = document.getElementById('tnrSlider');
+
+  const TPv = document.getElementById('TP');
+  const FPv = document.getElementById('FP');
+  const FNv = document.getElementById('FN');
+  const TNv = document.getElementById('TN');
+
+  const playBtn = document.getElementById('playBtn');
+  const resetBtn = document.getElementById('resetBtn');
+
+  // Plot bounds
+  const X0 = 80, X1 = 580, Y0 = 360, Y1 = 40;
+  const W = X1 - X0, H = Y0 - Y1;
+  const xpix = tnr => X0 + tnr * W; // x = TNR
+  const ypix = tpr => Y0 - tpr * H; // y = TPR
+
+  const PI = 0.5, N = 100;
+
+  function update(){
+    const tpr = parseFloat(tprSlider.value);
+    const tnr = parseFloat(tnrSlider.value);
+    const acc = 0.5 * tpr + 0.5 * tnr;
+
+    tprVal.textContent = tpr.toFixed(2);
+    tnrVal.textContent = tnr.toFixed(2);
+    accVal.textContent = acc.toFixed(2);
+    center.textContent = `Accuracy = (TP + TN) / N = ${acc.toFixed(2)}`;
+
+    const x = xpix(tnr), y = ypix(tpr);
+    pt.setAttribute('cx', x); pt.setAttribute('cy', y);
+    hGuide.setAttribute('x1', X0); hGuide.setAttribute('y1', y);
+    hGuide.setAttribute('x2', x);  hGuide.setAttribute('y2', y);
+    vGuide.setAttribute('x1', x);  vGuide.setAttribute('y1', y);
+    vGuide.setAttribute('x2', x);  vGuide.setAttribute('y2', Y0);
+
+    const P = Math.round(PI * N);
+    const Nn = N - P;
+    const TP = Math.round(tpr * P);
+    const FN = P - TP;
+    const TN = Math.round(tnr * Nn);
+    const FP = Nn - TN;
+
+    TPv.textContent = TP;
+    TNv.textContent = TN;
+    FPv.textContent = FP;
+    FNv.textContent = FN;
+  }
+
+  // --- Animation (copied behavior: sine/cos sweep; speed factor retained internally) ---
+  let animId = null, playing = false, phase = 0;
+  const SPEED_DEFAULT = 0.10; // ~10% of old max (you can tweak 0.05..0.10)
+
+  function step(){
+    // original step pattern with internal speed multiplier (no visible speed slider)
+    phase = (phase + 0.0025 * SPEED_DEFAULT) % 1;
+    const tpr = 0.2 + 0.8*(0.5 + 0.5*Math.sin(2*Math.PI*phase));
+    const tnr = 0.2 + 0.8*(0.5 + 0.5*Math.cos(2*Math.PI*phase));
+    tprSlider.value = tpr.toFixed(2);
+    tnrSlider.value = tnr.toFixed(2);
+    update();
+    animId = requestAnimationFrame(step);
+  }
+
+  function play(){
+    if (playing) { pause(); return; }
+    playing = true;
+    playBtn.textContent = '⏸ Pause';
+    animId = requestAnimationFrame(step);
+  }
+  function pause(){
+    playing = false;
+    playBtn.textContent = '▶ Play';
+    if (animId) cancelAnimationFrame(animId);
+  }
+  function reset(){
+    pause();
+    phase = 0;
+    tprSlider.value = 0.70;
+    tnrSlider.value = 0.80;
+    update();
+  }
+
+  // Events
+  tprSlider.addEventListener('input', ()=>{ pause(); update(); });
+  tnrSlider.addEventListener('input', ()=>{ pause(); update(); });
+  playBtn.addEventListener('click', play);
+  resetBtn.addEventListener('click', reset);
+
+  // init
+  update();
+</script>
+</body>
+</html>

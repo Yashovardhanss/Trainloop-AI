@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Precision-Recall Trade-off Game</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #1E40FF;      /* Primary blue from image */
+    --accent: #FF6B6B;   /* A contrasting color for spam */
+    --muted: #6A77B2;    /* A muted, desaturated blue for labels */
+    --panel: #F0F4FF;    /* Background for cards/panels */
+    --edge: #C0C9E8;     /* Light blue for borders and dividers */
+    --bg: #F0F4FF;       /* Main background color */
+    --paper: #FFFFFF;    /* White for contrast, e.g., slider thumb */
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    background-color: var(--bg);
+    background-image: radial-gradient(var(--edge) 1px, transparent 1px);
+    background-size: 16px 16px;
+    color:var(--ink);
+    font-family:'Roboto Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    display:grid; place-items:center; padding:16px;
+  }
+  .frame{
+    width:min(980px,95vw);
+    display:grid; gap:16px;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas:
+      "title title"
+      "game  panel"
+      "note  note";
+  }
+  .title{grid-area:title; font-size:18px; font-weight:700; letter-spacing:.02em}
+  .card{
+    background: rgba(255, 255, 255, 0.4);
+    border:1px solid var(--edge);
+    border-radius:14px;
+    padding:14px;
+    backdrop-filter: blur(2px);
+  }
+  .game{
+    grid-area:game;
+    position: relative;
+    min-height: 420px; /* Match original plot height */
+  }
+  .panel{grid-area:panel; display:grid; gap:12px; align-content: start;}
+  .note{grid-area:note; font-size:12px; color:var(--muted); line-height:1.5}
+
+  .controls{display:grid; gap:10px}
+  .control{background:transparent; border:1px solid var(--edge); border-radius:10px; padding:10px; display:grid; gap:8px}
+  .label{font-size:12px; color:var(--muted)}
+  .row{display:flex; gap:10px; align-items:center}
+  .chipwrap{display:grid; grid-template-columns:repeat(3,1fr); gap:8px}
+  .chip{border:1px solid var(--edge); border-radius:10px; padding:8px 10px; font-size:12px; display:flex; justify-content:space-between; align-items:center}
+  .chip b{font-weight:700}
+
+  input[type="range"]{-webkit-appearance:none; appearance:none; width:100%; height:2px; background:var(--edge); border-radius:2px; outline:none}
+  input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none; appearance:none; width:14px; height:14px; border-radius:50%; background:var(--paper); border:2px solid var(--ink); cursor:pointer; margin-top:-6px}
+  input[type="range"]::-moz-range-thumb{width:14px; height:14px; border-radius:50%; background:var(--paper); border:2px solid var(--ink); cursor:pointer}
+
+  button{
+    font-family:inherit; font-size:12px;
+    background:transparent; color:var(--ink); border:1px solid var(--edge);
+    padding:8px 12px; border-radius:10px; cursor:pointer;
+    transition: all 0.2s ease;
+  }
+  button:hover{border-color:var(--ink); background:rgba(255,255,0.5)}
+
+  .mini h4{margin:0 0 6px 0; font-size:12px; color:var(--muted)}
+  .matrix{
+    display:grid; grid-template-columns:repeat(3,1fr);
+    gap:6px; font-size:12px; align-items:center;
+  }
+  .cell{
+    border:1px solid var(--ink); border-radius:10px; padding:10px;
+    display:flex; flex-direction:column; gap:4px; min-height:56px;
+  }
+  .tag{font-size:10px; color:var(--muted)}
+  .val{font-weight:700}
+  .orange{color:var(--accent)}
+  .grey{color:var(--ink); opacity:.75}
+
+  svg{width:100%; height:100%; display:block; position:absolute; top:0; left:0;}
+  .email-dot { transition: all 0.2s ease; }
+  .email-dot.ham { fill: var(--ink); }
+  .email-dot.spam { fill: var(--accent); }
+  .email-dot.classified { stroke: var(--ink); stroke-width: 3px; }
+  .email-dot.unclassified { stroke: none; }
+
+  #threshold-line {
+    position: absolute;
+    top: 5%; height: 90%;
+    width: 2px;
+    background-color: var(--ink);
+    opacity: 0.7;
+    pointer-events: none;
+  }
+
+/* Responsive Adjustments */
+@media (max-width: 768px) {
+  .frame {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "title"
+      "game"
+      "panel"
+      "note";
+  }
+  .game {
+    min-height: 300px;
+  }
+  .panel {
+    grid-template-columns: 1fr;
+  }
+  .chipwrap {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 8px;
+  }
+  .title {
+    font-size: 16px;
+    text-align: center;
+  }
+  .chip {
+    font-size: 11px;
+    padding: 6px 8px;
+  }
+  .control {
+    padding: 8px;
+  }
+  button {
+    font-size: 11px;
+    padding: 6px 10px;
+  }
+  .note {
+    font-size: 11px;
+  }
+}
+
+</style>
+</head>
+<body>
+  <div class="frame">
+    <div class="title">The Precision-Recall Trade-off Game: Spam Filter</div>
+
+    <!-- GAME AREA -->
+    <div class="card game">
+      <svg id="plot"></svg>
+      <div id="threshold-line"></div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="panel">
+      <div class="controls">
+        <div class="control">
+          <div class="label">Filter Aggressiveness (Decision Threshold)</div>
+          <input id="thresholdSlider" type="range" min="0" max="100" step="1" value="50">
+        </div>
+        <div class="control">
+           <button id="newRoundBtn">Start New Round</button>
+        </div>
+      </div>
+
+      <div class="chipwrap">
+        <div class="chip"><span>Precision</span><b id="precisionVal">0.00</b></div>
+        <div class="chip"><span>Recall</span><b id="recallVal">0.00</b></div>
+        <div class="chip"><span>Score</span><b id="scoreVal">0</b></div>
+      </div>
+
+      <div class="card mini">
+        <h4>Confusion Matrix</h4>
+        <div class="matrix">
+          <div></div>
+          <div class="tag">Pred Spam</div>
+          <div class="tag">Pred Ham</div>
+
+          <div class="tag">Actual Spam</div>
+          <div class="cell">
+            <div class="tag orange">TP</div>
+            <div class="val" id="TP">—</div>
+          </div>
+          <div class="cell">
+            <div class="tag grey">FN</div>
+            <div class="val" id="FN">—</div>
+          </div>
+
+          <div class="tag">Actual Ham</div>
+          <div class="cell">
+            <div class="tag grey">FP</div>
+            <div class="val" id="FP">—</div>
+          </div>
+          <div class="cell">
+            <div class="tag orange">TN</div>
+            <div class="val" id="TN">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mini">
+        <h4>Scoring Rules</h4>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5">
+          • Correctly caught spam (TP): <b>+5 pts</b><br>
+          • Correctly ignored ham (TN): <b>+1 pt</b><br>
+          • Blocked real email (FP): <b>-3 pts</b><br>
+          • Missed spam (FN): <b>-10 pts</b>
+        </div>
+      </div>
+    </div>
+
+    <div class="note">
+      <b>Your Goal:</b> Maximize the score. Each dot is an email. Blue dots are real emails (ham), and red dots are spam. The line is your filter's threshold. Everything to the right of the line is classified as spam. Notice how trying to catch all the spam (high Recall) can cause you to block real emails (lowering Precision). Find the sweet spot!
+    </div>
+  </div>
+
+<script>
+  // DOM Elements
+  const svg = document.getElementById('plot');
+  const thresholdSlider = document.getElementById('thresholdSlider');
+  const thresholdLine = document.getElementById('threshold-line');
+  const newRoundBtn = document.getElementById('newRoundBtn');
+
+  // Value displays
+  const precisionVal = document.getElementById('precisionVal');
+  const recallVal = document.getElementById('recallVal');
+  const scoreVal = document.getElementById('scoreVal');
+  const TPv = document.getElementById('TP');
+  const FPv = document.getElementById('FP');
+  const FNv = document.getElementById('FN');
+  const TNv = document.getElementById('TN');
+
+  let emails = [];
+  const NUM_EMAILS = 80;
+
+  function generateEmails() {
+    emails = [];
+    svg.innerHTML = ''; // Clear previous round
+    for (let i = 0; i < NUM_EMAILS; i++) {
+      const isSpam = Math.random() < 0.4; // 40% chance of being spam
+      let spamminess;
+      // Make spam tend to have higher scores, and ham lower scores, but with overlap
+      if (isSpam) {
+        spamminess = 20 + Math.random() * 75; // Spam tends to be on the right
+      } else {
+        spamminess = 5 + Math.random() * 75;  // Ham tends to be on the left
+      }
+
+      const email = {
+        id: `email-${i}`,
+        isSpam: isSpam,
+        spamminess: spamminess, // 0-100 scale
+        yPos: 10 + Math.random() * 80 // Random vertical position for visual appeal
+      };
+      emails.push(email);
+
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('id', email.id);
+      circle.setAttribute('cx', `${email.spamminess}%`);
+      circle.setAttribute('cy', `${email.yPos}%`);
+      circle.setAttribute('r', 6);
+      circle.classList.add('email-dot', email.isSpam ? 'spam' : 'ham');
+      svg.appendChild(circle);
+    }
+  }
+
+  function update() {
+    const threshold = parseFloat(thresholdSlider.value);
+    thresholdLine.style.left = `${threshold}%`;
+
+    let TP = 0, FP = 0, TN = 0, FN = 0;
+
+    emails.forEach(email => {
+      const predictedAsSpam = email.spamminess >= threshold;
+      const circle = document.getElementById(email.id);
+
+      if (predictedAsSpam) {
+        circle.classList.add('classified');
+        circle.classList.remove('unclassified');
+        if (email.isSpam) {
+          TP++;
+        } else {
+          FP++;
+        }
+      } else { // Predicted as Ham
+        circle.classList.add('unclassified');
+        circle.classList.remove('classified');
+        if (email.isSpam) {
+          FN++;
+        } else {
+          TN++;
+        }
+      }
+    });
+
+    // Calculate metrics
+    const precision = (TP + FP > 0) ? TP / (TP + FP) : 0;
+    const recall = (TP + FN > 0) ? TP / (TP + FN) : 0;
+    
+    // Scoring based on rules
+    const score = (TP * 5) + (TN * 1) - (FP * 3) - (FN * 10);
+
+    // Update UI
+    precisionVal.textContent = precision.toFixed(2);
+    recallVal.textContent = recall.toFixed(2);
+    scoreVal.textContent = score;
+    TPv.textContent = TP;
+    FPv.textContent = FP;
+    FNv.textContent = FN;
+    TNv.textContent = TN;
+  }
+
+  function startNewRound() {
+    generateEmails();
+    update();
+  }
+
+  // Event Listeners
+  thresholdSlider.addEventListener('input', update);
+  newRoundBtn.addEventListener('click', startNewRound);
+
+  // Initial game start
+  startNewRound();
+</script>
+</body>
+</html>
