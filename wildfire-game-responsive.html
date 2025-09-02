@@ -114,37 +114,52 @@
   .matrix2 .cell{font-family:"Roboto Mono",monospace;font-weight:800;font-size:13px;text-align:center;background:#f9fbff;border:1px solid var(--ui-muted);border-radius:8px;padding:10px}
   .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--ui-muted);background:#fff;font-size:11px;font-weight:800;color:var(--blue)}
 
-        /* Responsive adjustments */
-        @media (max-width: 1024px) {
-            .container {
-                width: 95%;
-                padding: 1rem;
-            }
-            canvas {
-                max-width: 100%;
-                height: auto !important;
-            }
-        }
-        @media (max-width: 600px) {
-            body {
-                padding: 10px;
-            }
-            .container {
-                padding: 0.5rem;
-            }
-            h1, h2 {
-                font-size: 1.2em;
-            }
-            canvas {
-                width: 100% !important;
-                height: auto !important;
-            }
-            button {
-                font-size: 0.9em;
-                padding: 0.4rem 0.8rem;
-            }
-        }
-    </style>
+/* === Responsive Fixes === */
+@media (max-width: 768px) {
+  .wrap {
+    grid-template-columns: 1fr; /* Stack instead of side-by-side */
+    grid-template-rows: auto 1fr;
+    overflow: auto;
+  }
+  aside.panel {
+    max-height: 50vh;  /* Sidebar scrollable if too tall */
+  }
+  .canvas-wrap {
+    min-height: 50vh;  /* Ensure canvas visible */
+  }
+
+  .key-stats {
+    grid-template-columns: 1fr; /* stack stats */
+  }
+  .performance-grid {
+    grid-template-columns: 1fr; /* single column on mobile */
+  }
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 across instead of 5 */
+  }
+  .matrix2 {
+    grid-template-columns: 80px repeat(3, 1fr); /* shrink for narrow view */
+    font-size: 10px;
+  }
+
+  .hud-top {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .hud-item {
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+
+  .scan-results {
+    width: 90%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+}
+
+</style>
 </head>
 <body>
   <div class="wrap">
