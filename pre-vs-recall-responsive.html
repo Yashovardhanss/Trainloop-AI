@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precision vs. Recall</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            padding: 2rem;
+        }
+    
+        /* Responsive adjustments */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 1.5rem;
+                width: 95%;
+            }
+            svg {
+                width: 100% !important;
+                height: auto !important;
+            }
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 1rem;
+            }
+            svg {
+                width: 100% !important;
+                height: auto !important;
+            }
+            .title { font-size: 18px !important; }
+            .desc { font-size: 10px !important; }
+            .label { font-size: 12px !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 
+          ROBIN'S CORRECTION: 
+          Increased the SVG height and viewBox height from 450 to 600.
+          Repositioned the text and diagram elements vertically to prevent overlap,
+          especially in the "High Recall" panel where the selection circle is large.
+        -->
+        <svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <pattern id="grid" width="12" height="12" patternUnits="userSpaceOnUse">
+                    <circle cx="1" cy="1" r="0.7" fill="#e8e8f0" />
+                </pattern>
+            </defs>
+            
+            <rect width="100%" height="100%" fill="#f8f8fa"/>
+            <rect width="100%" height="100%" fill="url(#grid)" />
+
+            <style>
+                .title { font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 22px; font-weight: 500; fill: #0033cc; text-anchor: middle; }
+                .label { font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 15px; fill: #2962ff; text-anchor: middle; }
+                .desc { font-family: 'SF Mono', 'Menlo', 'Monaco', monospace; font-size: 12px; fill: #555; text-anchor: middle; }
+                .positive { fill: #2962ff; }
+                .negative { fill: #b0b0c0; }
+                .selection { fill: rgba(41, 98, 255, 0.1); stroke: #2962ff; stroke-width: 2; stroke-dasharray: 6 4; }
+                .divider { stroke: #d0d0d8; stroke-width: 1; }
+            
+        /* Responsive adjustments */
+        @media (max-width: 1024px) {
+            .container {
+                padding: 1.5rem;
+                width: 95%;
+            }
+            svg {
+                width: 100% !important;
+                height: auto !important;
+            }
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 1rem;
+            }
+            svg {
+                width: 100% !important;
+                height: auto !important;
+            }
+            .title { font-size: 18px !important; }
+            .desc { font-size: 10px !important; }
+            .label { font-size: 12px !important; }
+        }
+    </style>
+
+            <!-- Data Points Definition (unchanged) -->
+            <g id="data-points">
+                <!-- Positives (Blue Circles) -->
+                <circle class="positive" cx="130" cy="200" r="6"/> <circle class="positive" cx="160" cy="180" r="6"/>
+                <circle class="positive" cx="140" cy="240" r="6"/> <circle class="positive" cx="250" cy="150" r="6"/>
+                <circle class="positive" cx="300" cy="300" r="6"/> <circle class="positive" cx="90" cy="350" r="6"/>
+                <circle class="positive" cx="210" cy="100" r="6"/>
+                <!-- Negatives (Grey Circles) -->
+                <circle class="negative" cx="60" cy="150" r="6"/> <circle class="negative" cx="190" cy="260" r="6"/>
+                <circle class="negative" cx="280" cy="210" r="6"/> <circle class="negative" cx="110" cy="300" r="6"/>
+                <circle class="negative" cx="350" cy="120" r="6"/> <circle class="negative" cx="230" cy="340" r="6"/>
+                <circle class="negative" cx="330" cy="260" r="6"/> <circle class="negative" cx="180" cy="140" r="6"/>
+            </g>
+
+            <!-- Panel 1: High Precision -->
+            <g id="panel-precision">
+                <text x="200" y="50" class="title">High Precision</text>
+                <text x="200" y="75" class="desc">Selected items are very likely correct,</text>
+                <text x="200" y="90" class="desc">but we missed many relevant items.</text>
+                
+                <!-- Diagram elements are grouped and shifted down to create space -->
+                <g transform="translate(0, 80)">
+                    <use href="#data-points"/>
+                    <circle class="selection" cx="145" cy="210" r="45"/>
+                </g>
+                
+                <text x="200" y="540" class="label">Precision = 3 / (3 + 0) = 1.00</text>
+                <text x="200" y="560" class="label">Recall = 3 / (3 + 4) = 0.43</text>
+            </g>
+
+            <!-- Divider Line -->
+            <line class="divider" x1="400" y1="20" x2="400" y2="580" />
+
+            <!-- Panel 2: High Recall -->
+            <g id="panel-recall" transform="translate(400, 0)">
+                <text x="200" y="50" class="title">High Recall</text>
+                <text x="200" y="75" class="desc">We found all relevant items,</text>
+                <text x="200" y="90" class="desc">but included many incorrect ones.</text>
+
+                <!-- Diagram elements are grouped and shifted down to create space -->
+                <g transform="translate(0, 80)">
+                    <use href="#data-points"/>
+                    <circle class="selection" cx="200" cy="220" r="180"/>
+                </g>
+
+                <text x="200" y="540" class="label">Precision = 7 / (7 + 6) = 0.54</text>
+                <text x="200" y="560" class="label">Recall = 7 / (7 + 0) = 1.00</text>
+            </g>
+        </svg>
+    </div>
+</body>
+</html>

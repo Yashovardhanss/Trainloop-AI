@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wildfire Surveillance Drone — Blueprint Ops (Final Metrics Fixed)</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Roboto+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --blue:#0a48ff; --blue2:#0a40d0; --ink:#0a2a80; --bg:#ffffff;
+    --panel:rgba(255,255,255,.92); --grid:rgba(10,72,255,.20);
+    --ui-muted:rgba(10,72,255,.35);
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,Segoe UI,Roboto,Arial;overflow:hidden}
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;
+    background-image:radial-gradient(var(--grid) 1px,transparent 1px);
+    background-size:10px 10px;animation:gridPulse 8s ease-in-out infinite
+  }
+  @keyframes gridPulse{0%,100%{opacity:.22}50%{opacity:.42}}
+
+  .wrap{
+    position:fixed; inset:0; padding:12px;
+    display:grid; grid-template-columns:360px 1fr; gap:12px;
+    width:100vw; height:100vh; overflow:hidden;
+  }
+  .panel{
+    background:var(--panel); backdrop-filter:blur(12px);
+    border:1.5px solid var(--ui-muted); border-radius:16px; padding:12px;
+    box-shadow:0 12px 40px rgba(10,72,255,.10); min-height:0;
+  }
+  aside.panel{display:flex; flex-direction:column; overflow:auto}
+  h1{margin:0 0 8px;color:var(--blue);font-size:18px;font-weight:800;letter-spacing:.2px}
+  .sub{font-size:12px;opacity:.9;margin-bottom:10px;line-height:1.45}
+
+  .key-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:8px 0;padding:10px;background:rgba(10,72,255,.06);border-radius:12px;border:1px solid var(--ui-muted)}
+  .key-stat{text-align:center}
+  .key-stat h3{margin:0 0 4px;font-size:10px;font-weight:800;text-transform:uppercase;opacity:.8}
+  .key-stat .value{font-family:"Roboto Mono",monospace;font-size:20px;color:var(--blue);font-weight:900}
+  .key-stat .unit{font-family:"Roboto Mono",monospace;font-size:10px;opacity:.7}
+
+  .alert-feed{background:rgba(10,72,255,.06);border:1.5px dashed var(--ui-muted);border-radius:12px;padding:10px;margin:10px 0;max-height:120px;overflow-y:auto}
+  .alert-title{font-size:11px;font-weight:800;color:var(--blue);margin-bottom:8px;display:flex;align-items:center;gap:6px}
+  .alert-item{font-size:10px;font-family:"Roboto Mono",monospace;padding:4px 8px;background:rgba(255,255,255,.7);border-radius:6px;margin:4px 0;border-left:3px solid var(--blue)}
+  .alert-new{animation:alertFlash 1.2s ease-out}
+  @keyframes alertFlash{0%{background:rgba(10,72,255,.18)}100%{background:rgba(255,255,255,.7)}}
+
+  .performance-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:8px}
+  .perf-card{border:1.5px dashed var(--ui-muted);border-radius:10px;padding:8px;background:rgba(255,255,255,.86);text-align:center}
+  .perf-card h3{margin:0 0 4px;font-size:10px;font-weight:800}
+  .perf-value{font-family:"Roboto Mono",monospace;font-size:14px;color:var(--blue);font-weight:800}
+  .perf-label{font-family:"Roboto Mono",monospace;font-size:8px;opacity:.7}
+
+  .confusion-matrix{margin-top:10px;padding:10px;background:rgba(255,255,255,.9);border:1.5px solid var(--ui-muted);border-radius:10px}
+  .confusion-title{font-size:11px;font-weight:800;margin-bottom:8px;text-align:center}
+  .matrix{display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:10px}
+  .matrix-cell{padding:6px 4px;text-align:center;border-radius:6px;font-weight:700;color:#fff}
+  .tp{background:#0a48ff}
+  .fp{background:#274bff}
+  .tn{background:#5a88ff}
+  .fn{background:#1539c9}
+
+  .legend{margin-top:8px;font-size:10px;padding:8px;background:rgba(255,255,255,.7);border-radius:8px;border:1px dashed var(--ui-muted)}
+  .legend-item{display:flex;align-items:center;gap:8px;margin:4px 0}
+  .legend-swatch{width:14px;height:14px;border-radius:3px;background:var(--blue);border:2px solid #fff;box-shadow:0 0 0 1px var(--blue)}
+
+  .canvas-wrap{position:relative;border:2px solid var(--blue);border-radius:16px;overflow:hidden;background:transparent;min-width:0}
+  canvas{display:block;width:100%;height:100%}
+
+  .hud-top{position:absolute;top:10px;left:10px;right:10px;display:flex;justify-content:space-between;gap:10px;pointer-events:none}
+  .hud-item{font-family:"Roboto Mono",monospace;color:var(--blue);background:rgba(255,255,255,.9);border:1.5px solid var(--ui-muted);padding:6px 10px;border-radius:10px;font-weight:800;font-size:11px}
+
+  .scan-btn-center{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:var(--blue);border:3px solid rgba(255,255,255,.9);color:#fff;padding:12px 24px;border-radius:12px;cursor:pointer;font-weight:900;font-size:15px;font-family:"Roboto Mono",monospace;transition:all .25s;box-shadow:0 8px 32px rgba(10,72,255,.35);backdrop-filter:blur(8px);display:none}
+  .scan-btn-center:hover{transform:translateX(-50%) translateY(-2px)}
+  .scan-btn-center:disabled{opacity:.55;cursor:not-allowed;transform:translateX(-50%)}
+  .scan-btn-center.show{display:block;animation:scanBtnAppear .3s ease-out}
+  .scan-btn-center.scanning{animation:scanPulse .6s ease-in-out infinite alternate}
+  @keyframes scanBtnAppear{from{transform:translateX(-50%) translateY(40px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+  @keyframes scanPulse{0%{transform:translateX(-50%) scale(1)}100%{transform:translateX(-50%) scale(1.07)}}
+
+  .scan-results{position:absolute;bottom:10px;left:10px;background:rgba(255,255,255,.96);border:1.5px solid var(--ui-muted);padding:10px;border-radius:10px;font-size:11px;font-family:"Roboto Mono",monospace;width:270px;display:none;backdrop-filter:blur(8px)}
+  .scan-results.show{display:block;animation:slideUp .25s ease-out}
+  @keyframes slideUp{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+  .scan-results .result-line{display:flex;justify-content:space-between;margin-bottom:6px}
+  .scan-buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  button{background:#fff;border:1.5px solid var(--ui-muted);color:var(--ink);padding:8px 12px;border-radius:10px;cursor:pointer;font-weight:800;transition:.15s;font-size:11px}
+  button:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(10,72,255,.12)}
+  .accent{background:var(--blue);border-color:transparent;color:#fff}
+  .danger{background:#274bff;border-color:transparent;color:#fff}
+  .success{background:#5a88ff;border-color:transparent;color:#fff}
+
+  .centerSplash{position:absolute;inset:0;display:none;place-items:center;background:rgba(255,255,255,.96);z-index:15}
+  .centerSplash.show{display:grid}
+  .centerSplash .box{border:2px solid var(--blue2);border-radius:16px;background:#fff;padding:20px;max-width:720px;width:90%;box-shadow:0 20px 60px rgba(10,72,255,.15)}
+
+  .tutorial{position:absolute;inset:0;background:rgba(255,255,255,.96);z-index:20;display:none;place-items:center}
+  .tutorial.show{display:grid}
+  .tutorial-content{background:#fff;border:2px solid var(--blue);border-radius:16px;padding:20px;max-width:650px;box-shadow:0 20px 60px rgba(10,72,255,.12)}
+
+  .results-section{margin:10px 0;padding:12px;background:rgba(10,72,255,.05);border-radius:12px;border:1px solid var(--ui-muted)}
+  .results-title{font-size:14px;font-weight:800;color:var(--blue);margin-bottom:10px;text-align:center}
+
+  .metrics-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:0 0 12px}
+  .metric{display:flex;flex-direction:column;align-items:center;gap:4px;padding:10px;background:white;border-radius:10px;border:1px dashed var(--ui-muted)}
+  .metric-value{font-size:18px;font-weight:900;color:var(--blue);font-family:"Roboto Mono",monospace}
+  .metric-label{font-size:10px;font-weight:800;text-transform:uppercase;opacity:.85}
+  .metric-desc{font-size:9px;opacity:.7;line-height:1.25;text-align:center}
+
+  /* Elegant final matrix */
+  .matrix2{display:grid;grid-template-columns:120px repeat(3,1fr);gap:6px;align-items:stretch}
+  .matrix2 .head{font-weight:800;font-size:11px;color:var(--blue);text-align:center;background:#fff;border:1px solid var(--ui-muted);border-radius:8px;padding:8px}
+  .matrix2 .rowhead{font-weight:800;font-size:11px;color:var(--blue);background:#fff;border:1px solid var(--ui-muted);border-radius:8px;padding:8px}
+  .matrix2 .cell{font-family:"Roboto Mono",monospace;font-weight:800;font-size:13px;text-align:center;background:#f9fbff;border:1px solid var(--ui-muted);border-radius:8px;padding:10px}
+  .chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--ui-muted);background:#fff;font-size:11px;font-weight:800;color:var(--blue)}
+
+        /* Responsive adjustments */
+        @media (max-width: 1024px) {
+            .container {
+                width: 95%;
+                padding: 1rem;
+            }
+            canvas {
+                max-width: 100%;
+                height: auto !important;
+            }
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            .container {
+                padding: 0.5rem;
+            }
+            h1, h2 {
+                font-size: 1.2em;
+            }
+            canvas {
+                width: 100% !important;
+                height: auto !important;
+            }
+            button {
+                font-size: 0.9em;
+                padding: 0.4rem 0.8rem;
+            }
+        }
+    </style>
+</head>
+<body>
+  <div class="wrap">
+    <aside class="panel">
+      <h1>️Drone Surveillance</h1>
+      <div class="sub">Receive real-time satellite alerts, pilot your drone to the hotspot, scan it, and confirm if it’s a fire before dispatching resources.</div>
+
+      <div style="display:grid;grid-template-columns:1fr;gap:8px;margin:8px 0">
+        <button id="resetBtn">🔄 New Mission</button>
+      </div>
+
+      <div class="alert-feed">
+        <div class="alert-title">📡 SATELLITE ALERTS <span id="alertCount">0 active</span></div>
+        <div id="alertFeed"><div style="text-align:center;opacity:.6;font-size:10px">Monitoring…</div></div>
+      </div>
+
+      <div class="key-stats">
+        <div class="key-stat"><h3>Battery</h3><div class="value" id="batteryPercent">100</div><div class="unit">%</div></div>
+        <div class="key-stat"><h3>Score</h3><div class="value" id="scoreDisplay">0</div><div class="unit">pts</div></div>
+        <div class="key-stat"><h3>Time</h3><div class="value" id="timer">2:00</div><div class="unit">left</div></div>
+      </div>
+
+      <div class="performance-grid">
+        <div class="perf-card"><h3>Wildfires Found</h3><div class="perf-value" id="truePositives">0 / ?</div><div class="perf-label">Correct Identifications</div></div>
+        <div class="perf-card"><h3>False Alarms</h3><div class="perf-value" id="falsePositives">0</div><div class="perf-label">Incorrect Classifications</div></div>
+        <div class="perf-card"><h3>Correct Dismissals</h3><div class="perf-value" id="trueNegatives">0</div><div class="perf-label">Properly Dismissed</div></div>
+        <div class="perf-card"><h3>Missed Fires</h3><div class="perf-value" id="falseNegatives">0</div><div class="perf-label">Dangerous Oversights</div></div>
+      </div>
+
+      <div class="confusion-matrix">
+        <div class="confusion-title">📊 Live Matrix (decisions only)</div>
+        <div class="matrix">
+          <div class="matrix-cell tp">TP: <span id="matrixTP">0</span></div>
+          <div class="matrix-cell fp">FP: <span id="matrixFP">0</span></div>
+          <div class="matrix-cell fn">FN: <span id="matrixFN">0</span></div>
+          <div class="matrix-cell tn">TN: <span id="matrixTN">0</span></div>
+        </div>
+        <div style="font-size:8px;margin-top:6px;text-align:center;opacity:.7">Live counts exclude unresolved alerts.</div>
+      </div>
+
+      <div class="legend">
+        <div style="font-weight:800;margin-bottom:6px;font-size:11px">🔍 Identified Target:</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:linear-gradient(135deg, #0a48ff 0%, #5a88ff 100%);"></div><span>Wildfire — starburst</span></div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#0a48ff; box-shadow:inset 0 0 0 2px #fff, 0 0 0 1px #0a48ff; border-style:dashed;"></div><span>Campfire — circle, dashed ring</span></div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#5a88ff; transform:rotate(45deg)"></div><span>Industrial — diamond</span></div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#1539c9; clip-path:polygon(50% 10%, 90% 90%, 10% 90%)"></div><span>Vehicle — triangle (moves)</span></div>
+      </div>
+
+      <button id="tutorialBtn" style="width:100%;margin-top:10px">📖 Mission Briefing</button>
+    </aside>
+
+    <main class="panel canvas-wrap">
+      <div class="hud-top">
+        <div class="hud-item" id="coordDisplay">Coordinates: 0, 0</div>
+        <div class="hud-item" id="altitudeDisplay">Altitude: 500m</div>
+        <div class="hud-item" id="statusDisplay">Mission: Standby</div>
+      </div>
+
+      <button id="scanBtn" class="scan-btn-center">🔍 SCAN TARGET</button>
+
+      <div class="scan-results" id="scanResultsPanel">
+        <div style="font-weight:800;margin-bottom:8px;color:var(--blue)">📡 SCAN RESULTS:</div>
+        <div class="result-line"><span>Target Type:</span> <span id="targetType">Unknown</span></div>
+        <div class="result-line"><span>Confidence:</span> <span id="confidenceLevel">--%</span></div>
+        <div class="result-line"><span>Temperature:</span> <span id="temperatureReading">---°C</span></div>
+        <div class="result-line"><span>Size:</span> <span id="sizeReading">---m</span></div>
+        <div class="scan-buttons">
+          <button id="dismissBtn" class="success">✓ Dismiss (Safe)</button>
+          <button id="confirmBtn" class="danger">⚠ Confirm (Wildfire)</button>
+        </div>
+      </div>
+
+      <canvas id="c"></canvas>
+
+      <div class="centerSplash" id="splash">
+        <div class="box">
+          <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <span class="chip">Total Alerts: <strong id="chipTotal">0</strong></span>
+            <span class="chip">Actual Wildfires: <strong id="chipActPos">0</strong></span>
+            <span class="chip">Unresolved at End: <strong id="chipUnres">0</strong></span>
+          </div>
+
+          <div class="results-section">
+            <div class="results-title">📊 Final Performance</div>
+
+            <div class="metrics-grid">
+              <div class="metric"><div class="metric-value" id="accuracyValue">0%</div><div class="metric-label">Accuracy</div></div>
+              <div class="metric"><div class="metric-value" id="precisionValue">0%</div><div class="metric-label">Precision</div></div>
+              <div class="metric"><div class="metric-value" id="recallValue">0%</div><div class="metric-label">Recall</div></div>
+              <div class="metric"><div class="metric-value" id="f1Value">0%</div><div class="metric-label">F1</div></div>
+              <div class="metric"><div class="metric-value" id="specificityValue">0%</div><div class="metric-label">Specificity</div></div>
+            </div>
+
+            <!-- Elegant 2x2 matrix with totals -->
+            <div class="matrix2" style="margin-top:6px">
+              <div class="head"></div>
+              <div class="head">Actual +</div>
+              <div class="head">Actual −</div>
+              <div class="head">Pred Totals</div>
+
+              <div class="rowhead">Pred +</div>
+              <div class="cell" id="mTP">0</div>
+              <div class="cell" id="mFP">0</div>
+              <div class="cell" id="mPredPos">0</div>
+
+              <div class="rowhead">Pred −</div>
+              <div class="cell" id="mFN">0</div>
+              <div class="cell" id="mTN">0</div>
+              <div class="cell" id="mPredNeg">0</div>
+
+              <div class="rowhead">Actual Totals</div>
+              <div class="cell" id="mActPos">0</div>
+              <div class="cell" id="mActNeg">0</div>
+              <div class="cell" id="mTotal">0</div>
+            </div>
+
+            <div style="font-family:monospace;line-height:1.6;text-align:center;margin:12px 0">
+              <strong>Final Score: <span id="finalScore">0</span></strong><br>
+              <span id="batteryBonus">Battery Bonus: +0</span>
+            </div>
+          </div>
+
+          <button id="retryBtn" class="accent" style="width:100%">🚀 Retry Mission</button>
+        </div>
+      </div>
+
+      <div class="tutorial" id="tutorialOverlay">
+        <div class="tutorial-content">
+          <h2 style="color:var(--blue);margin-bottom:12px">🛰️ Satellite-Guided Detection</h2>
+          <div style="text-align:left;font-size:13px;line-height:1.5">
+            <p><strong>Tip:</strong> Click to set a waypoint. WASD/Arrow keys for nudges. Scan when within range.</p>
+          </div>
+          <button id="closeTutorial" class="accent" style="margin-top:10px">🚀 Begin</button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+<script>
+/* ====== Canvas + mapping ====== */
+const qs = id => document.getElementById(id);
+const canvas = qs('c'), ctx = canvas.getContext('2d');
+let W = 0, H = 0;
+function resize(){ W = canvas.clientWidth; H = canvas.clientHeight; canvas.width = W; canvas.height = H; }
+resize(); window.addEventListener('resize', resize);
+function getCanvasPoint(e){
+  const r = canvas.getBoundingClientRect();
+  const sx = canvas.width / r.width, sy = canvas.height / r.height;
+  return { x:(e.clientX-r.left)*sx, y:(e.clientY-r.top)*sy };
+}
+
+/* ====== Game state ====== */
+const HEAT_SOURCES = {
+  wildfire:  { tone: '#0a48ff', isThreat: true,  baseTemp: 850, size:[12,20], shape:'star'     },
+  campfire:  { tone: '#0a48ff', isThreat: false, baseTemp: 420, size:[5,10],  shape:'circleD' },
+  industrial:{ tone: '#5a88ff', isThreat: false, baseTemp: 320, size:[8,16],  shape:'diamond' },
+  vehicle:   { tone: '#1539c9', isThreat: false, baseTemp: 220, size:[6,10],  shape:'tri'     }
+};
+let entities = [], actualTotalWildfires = 0;
+let gameRunning=false, gameTime=0, missionDuration=120, score=0, alertMessages=[];
+let TP=0, FP=0, TN=0, FN=0, battery=100, targetSelected=false, lastAlertTime=0;
+let drone = { x:0, y:0, vx:0, vy:0, angle:0, rotorPhase:0 };
+let targetPosition = { x:0, y:0 };
+const MAX_SPEED=280, ACCEL=800, FRICTION=0.86, FOG_RADIUS=140, SCAN_RADIUS=28;
+let wind = { x:0, y:0, t:0 };
+let isScanning=false, scanProgress=0, currentTarget=null;
+const SCAN_DURATION=1.9, BATTERY_DRAIN_RATE=0.68, SCAN_BATTERY_COST=2.2;
+const scanBtn = qs('scanBtn'), scanResultsPanel=qs('scanResultsPanel');
+
+/* ====== Alerts ====== */
+function generateInitialTargets(){
+  entities=[]; actualTotalWildfires=0; alertMessages=[];
+  const n = 4 + Math.floor(Math.random()*2);
+  for (let i=0;i<n;i++) createNewAlert();
+  updateAlertFeed();
+}
+function createNewAlert(){
+  let actualType; const r=Math.random();
+  if (r<0.25) actualType='wildfire'; else if (r<0.48) actualType='campfire';
+  else if (r<0.78) actualType='industrial'; else actualType='vehicle';
+  const src = HEAT_SOURCES[actualType]; if (src.isThreat) actualTotalWildfires++;
+  const a = {
+    id: Date.now()+Math.random(),
+    actualType,
+    x: 80 + Math.random()*(W-160),
+    y: 80 + Math.random()*(H-160),
+    temp: src.baseTemp + (Math.random()-0.5)*src.baseTemp*0.32,
+    size: src.size[0]+Math.random()*(src.size[1]-src.size[0]),
+    isThreat: src.isThreat,
+    resolved:false, scanned:false,
+    movement: (actualType==='vehicle'||(actualType==='industrial'&&Math.random()<0.25))? {vx:(Math.random()-0.5)*36, vy:(Math.random()-0.5)*36} : null,
+    alertTime: gameTime
+  };
+  entities.push(a);
+  alertMessages.unshift(`Ping detected near (${Math.round(a.x)}, ${Math.round(a.y)})`);
+  if (alertMessages.length>4) alertMessages.pop();
+}
+function updateAlertFeed(){
+  const feed = qs('alertFeed');
+  const unresolved = entities.filter(e=>!e.resolved).length;
+  qs('alertCount').textContent = `${unresolved} active`;
+  feed.innerHTML = alertMessages.length
+    ? alertMessages.map((m,i)=>`<div class="alert-item ${i===0?'alert-new':''}">${m}</div>`).join('')
+    : '<div style="text-align:center;opacity:.6;font-size:10px">All clear — monitoring…</div>';
+}
+
+/* ====== Confidence ====== */
+function calculateConfidence(ent){
+  let c=0;
+  c += (ent.temp/1200)*0.6;
+  c += ent.isThreat ? (0.1+Math.random()*0.3) : -(0.05+Math.random()*0.22);
+  c += (Math.random()-0.5)*0.45;
+  if (Math.random()<0.15) c=Math.random();
+  return Math.max(0.05, Math.min(0.95, c));
+}
+
+/* ====== Input ====== */
+canvas.addEventListener('click', e=>{
+  if (!gameRunning || battery<=0) return;
+  const p = getCanvasPoint(e);
+  targetPosition.x=p.x; targetPosition.y=p.y; targetSelected=true;
+  scanBtn.classList.add('show');
+});
+canvas.addEventListener('pointermove', ()=>{
+  qs('coordDisplay').textContent = `Coordinates: ${Math.round(drone.x)}, ${Math.round(drone.y)}`;
+});
+const keys=new Set();
+window.addEventListener('keydown', e=>{
+  const k=e.key.toLowerCase();
+  if (['w','a','s','d','arrowup','arrowdown','arrowleft','arrowright'].includes(k)){ e.preventDefault(); keys.add(k); }
+});
+window.addEventListener('keyup', e=> keys.delete(e.key.toLowerCase()));
+
+/* ====== Loop ====== */
+function gameLoop(){
+  if (!gameRunning) return;
+  const dt=1/60; gameTime+=dt;
+  wind.t += dt*0.3; wind.x = Math.sin(wind.t*1.3)*22; wind.y = Math.cos(wind.t*0.9)*18;
+
+  if (gameTime - lastAlertTime > 7 + Math.random()*10){
+    if (Math.random()<0.72 && entities.length<16){ createNewAlert(); updateAlertFeed(); lastAlertTime=gameTime; }
+  }
+
+  updateDrone(dt); updateEntities(dt); updateBattery(dt); updateScanning(dt); draw(); updateUI();
+  if (gameTime>=missionDuration || battery<=0){ endMission(); return; }
+  requestAnimationFrame(gameLoop);
+}
+
+function updateDrone(dt){
+  if (battery<=0){ drone.vx*=0.95; drone.vy*=0.95; return; }
+  let ax=0, ay=0, manual=false;
+  if (keys.has('w')||keys.has('arrowup')){ ay-=1; manual=true; }
+  if (keys.has('s')||keys.has('arrowdown')){ ay+=1; manual=true; }
+  if (keys.has('a')||keys.has('arrowleft')){ ax-=1; manual=true; }
+  if (keys.has('d')||keys.has('arrowright')){ ax+=1; manual=true; }
+  if (manual){
+    targetPosition.x=drone.x; targetPosition.y=drone.y;
+    const n=Math.hypot(ax,ay)||1; drone.vx+=ACCEL*(ax/n)*dt; drone.vy+=ACCEL*(ay/n)*dt;
+  } else {
+    const dx=targetPosition.x-drone.x, dy=targetPosition.y-drone.y, d=Math.hypot(dx,dy);
+    if (d>8){ drone.vx+=(dx/d)*ACCEL*dt*0.55; drone.vy+=(dy/d)*ACCEL*dt*0.55; }
+  }
+  drone.vx += (wind.x*0.12)*dt; drone.vy += (wind.y*0.12)*dt;
+  const sp=Math.hypot(drone.vx,drone.vy); if (sp>MAX_SPEED){ drone.vx*=MAX_SPEED/sp; drone.vy*=MAX_SPEED/sp; }
+  drone.vx*=FRICTION; drone.vy*=FRICTION; drone.x+=drone.vx*dt; drone.y+=drone.vy*dt;
+  drone.x=Math.max(25,Math.min(W-25,drone.x)); drone.y=Math.max(25,Math.min(H-25,drone.y));
+  if (Math.abs(drone.vx)>1||Math.abs(drone.vy)>1) drone.angle=Math.atan2(drone.vy,drone.vx);
+  drone.rotorPhase += dt*(6 + Math.min(sp/40,6));
+}
+function updateEntities(dt){
+  entities.forEach(e=>{
+    if (e.movement){
+      e.x+=e.movement.vx*dt; e.y+=e.movement.vy*dt;
+      if (e.x<40||e.x>W-40) e.movement.vx*=-1;
+      if (e.y<40||e.y>H-40) e.movement.vy*=-1;
+    }
+  });
+}
+function updateBattery(dt){
+  const sp=Math.hypot(drone.vx,drone.vy);
+  const windLoad=(Math.abs(wind.x)+Math.abs(wind.y))*0.0025;
+  if (sp>10) battery -= (BATTERY_DRAIN_RATE+windLoad)*dt;
+  if (isScanning) battery -= (BATTERY_DRAIN_RATE*1.5+windLoad)*dt;
+  battery = Math.max(0,battery);
+}
+function findTargetInRange(){
+  for (const e of entities){
+    if (e.resolved) continue;
+    if (Math.hypot(e.x-drone.x, e.y-drone.y) < SCAN_RADIUS) return e;
+  }
+  return null;
+}
+function startScan(){
+  if (isScanning || battery<SCAN_BATTERY_COST) return;
+  const t=findTargetInRange();
+  if (t){ isScanning=true; scanProgress=0; currentTarget=t; scanBtn.disabled=true; scanBtn.classList.add('scanning'); scanBtn.textContent="🔍 SCANNING…"; battery-=SCAN_BATTERY_COST; }
+}
+function updateScanning(dt){
+  if (!isScanning) return;
+  const d=Math.hypot(currentTarget.x-drone.x, currentTarget.y-drone.y);
+  if (d>SCAN_RADIUS+6){
+    isScanning=false; currentTarget=null; scanBtn.disabled=false; scanBtn.classList.remove('scanning');
+    scanBtn.textContent="❌ SCAN FAILED"; setTimeout(()=>scanBtn.textContent="🔍 SCAN TARGET",1000); return;
+  }
+  scanProgress+=dt; if (scanProgress>=SCAN_DURATION) completeScan();
+}
+function completeScan(){
+  isScanning=false; scanBtn.classList.remove('scanning'); currentTarget.scanned=true;
+  const conf=calculateConfidence(currentTarget);
+  qs('targetType').textContent="Heat Source";
+  qs('confidenceLevel').textContent=`${Math.round(conf*100)}%`;
+  qs('temperatureReading').textContent=`${Math.round(currentTarget.temp)}°C`;
+  qs('sizeReading').textContent=`${Math.round(currentTarget.size)}m`;
+  scanResultsPanel.classList.add('show');
+}
+function resolveTarget(isConfirmed){
+  if (!currentTarget) return;
+  if (isConfirmed){ if (currentTarget.isThreat){ TP++; score+=1200; } else { FP++; score-=600; } }
+  else { if (currentTarget.isThreat){ FN++; score-=220; } else { TN++; score+=320; } }
+  currentTarget.resolved=true; currentTarget=null; scanResultsPanel.classList.remove('show');
+  scanBtn.disabled=false; scanBtn.textContent="🔍 SCAN TARGET";
+  updateConfusionMatrix(); updateAlertFeed();
+}
+function updateConfusionMatrix(){ qs('matrixTP').textContent=TP; qs('matrixFP').textContent=FP; qs('matrixFN').textContent=FN; qs('matrixTN').textContent=TN; }
+
+/* ====== FINAL CONFUSION (includes unresolved as Pred −) ====== */
+function computeFinalConfusion(){
+  const unresolvedThreats = entities.filter(e=>!e.resolved && e.isThreat).length;
+  const unresolvedSafe    = entities.filter(e=>!e.resolved && !e.isThreat).length;
+  const finalTP = TP;
+  const finalFP = FP;
+  const finalFN = FN + unresolvedThreats;   // missed fires
+  const finalTN = TN + unresolvedSafe;      // safe items never flagged
+  const actPos  = actualTotalWildfires;
+  const actNeg  = entities.length - actualTotalWildfires;
+  const predPos = finalTP + finalFP;
+  const predNeg = finalTN + finalFN;
+  const total   = finalTP + finalTN + finalFP + finalFN;
+  return {finalTP, finalFP, finalFN, finalTN, actPos, actNeg, predPos, predNeg, total};
+}
+
+/* ====== Metrics from final confusion ====== */
+function metricsFromFinal(F){
+  const precision   = (F.finalTP+F.finalFP)? F.finalTP/(F.finalTP+F.finalFP) : 0;
+  const recall      = (F.finalTP+F.finalFN)? F.finalTP/(F.finalTP+F.finalFN) : 0;
+  const f1          = (precision+recall)? (2*precision*recall)/(precision+recall) : 0;
+  const specificity = (F.finalTN+F.finalFP)? F.finalTN/(F.finalTN+F.finalFP) : 0;
+  const accuracy    = F.total ? (F.finalTP+F.finalTN)/F.total : 0;
+  return {precision, recall, f1, specificity, accuracy};
+}
+const pct = x => `${(x*100).toFixed(1)}%`;
+
+/* ====== Drawing ====== */
+function drawFogOfWar(){
+  ctx.save(); ctx.fillStyle='rgba(10,72,255,0.06)'; ctx.fillRect(0,0,W,H);
+  const g = ctx.createRadialGradient(drone.x,drone.y,FOG_RADIUS*0.5, drone.x,drone.y,FOG_RADIUS);
+  g.addColorStop(0,'rgba(255,255,255,0)'); g.addColorStop(1,'rgba(255,255,255,0.92)');
+  ctx.globalCompositeOperation='destination_out'; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(drone.x,drone.y,FOG_RADIUS,0,Math.PI*2); ctx.fill(); ctx.restore();
+}
+function drawWaypoint(){
+  const d=Math.hypot(targetPosition.x-drone.x, targetPosition.y-drone.y);
+  if (d>16 && targetSelected){ ctx.strokeStyle='rgba(10,72,255,.9)'; ctx.lineWidth=2; ctx.setLineDash([6,6]); ctx.beginPath(); ctx.arc(targetPosition.x,targetPosition.y,15,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]); }
+}
+function drawEntity(e){
+  ctx.save(); ctx.translate(e.x,e.y);
+  const src=HEAT_SOURCES[e.actualType];
+  if (e.resolved){
+    ctx.shadowColor=src.tone; ctx.shadowBlur=10; ctx.fillStyle=src.tone; ctx.strokeStyle='#fff'; ctx.lineWidth=3;
+    if (src.shape==='star'){ const spikes=7,r1=e.size*0.55,r2=e.size*0.95; ctx.beginPath(); for(let i=0;i<spikes*2;i++){const r=(i%2===0)?r2:r1; const a=(i/(spikes*2))*Math.PI*2; ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);} ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    else if (src.shape==='circleD'){ ctx.beginPath(); ctx.arc(0,0,e.size,0,Math.PI*2); ctx.fill(); ctx.stroke(); ctx.setLineDash([5,4]); ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,0,e.size+6,0,Math.PI*2); ctx.stroke(); }
+    else if (src.shape==='diamond'){ ctx.beginPath(); ctx.moveTo(0,-e.size); ctx.lineTo(e.size,0); ctx.lineTo(0,e.size); ctx.lineTo(-e.size,0); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+    else { ctx.beginPath(); ctx.moveTo(0,-e.size); ctx.lineTo(e.size*0.9,e.size*0.9); ctx.lineTo(-e.size*0.9,e.size*0.9); ctx.closePath(); ctx.fill(); ctx.stroke(); }
+  } else {
+    const age=gameTime-e.alertTime, k=1+Math.sin(gameTime*4)*(age<2?.35:.18);
+    ctx.fillStyle='rgba(10,72,255,.85)'; ctx.shadowColor='rgba(10,72,255,.7)'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(0,0,10*k,0,Math.PI*2); ctx.fill();
+    if (!e.scanned){ ctx.shadowBlur=0; ctx.fillStyle='#fff'; ctx.font='bold 12px Inter'; ctx.textAlign='center'; ctx.fillText('?',0,4); }
+  }
+  ctx.restore();
+}
+function drawScanFX(){
+  if (!isScanning||!currentTarget) return;
+  const p=scanProgress/SCAN_DURATION, cx=currentTarget.x, cy=currentTarget.y;
+  for (let i=0;i<3;i++){ ctx.strokeStyle=`rgba(10,72,255,${0.8-i*0.25})`; ctx.lineWidth=3-i; ctx.beginPath(); ctx.arc(cx,cy,22+i*12,-Math.PI/2,-Math.PI/2+p*Math.PI*2); ctx.stroke(); }
+  const t=gameTime*2.2, r=36; ctx.strokeStyle='rgba(10,72,255,.85)'; ctx.lineWidth=2; ctx.save(); ctx.translate(cx,cy); ctx.rotate(t);
+  for (let i=0;i<4;i++){ ctx.rotate(Math.PI/2); ctx.beginPath(); ctx.moveTo(r,0); ctx.lineTo(r+12,0); ctx.stroke(); ctx.beginPath(); ctx.moveTo(-r,0); ctx.lineTo(-r-12,0); ctx.stroke(); }
+  ctx.restore(); ctx.fillStyle=`rgba(10,72,255,${0.08+Math.sin(gameTime*8)*0.04})`; ctx.beginPath(); ctx.arc(cx,cy,30,0,Math.PI*2); ctx.fill();
+}
+function drawDrone(){
+  ctx.save(); ctx.translate(drone.x,drone.y); ctx.rotate(drone.angle);
+  ctx.fillStyle='rgba(0,0,0,0.08)'; ctx.beginPath(); ctx.ellipse(4,6,22,10,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#0a48ff'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(-18,-8); ctx.lineTo(18,8); ctx.moveTo(-18,8); ctx.lineTo(18,-8); ctx.stroke();
+  ctx.fillStyle='#0b2a75'; ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.ellipse(0,0,18,8,0,0,Math.PI*2); ctx.fill(); ctx.stroke();
+  const props=[[-18,-8],[18,8],[-18,8],[18,-8]];
+  props.forEach(([px,py],i)=>{ ctx.save(); ctx.translate(px,py); ctx.rotate(drone.rotorPhase*(i%2?1:-1)); ctx.fillStyle='#0a48ff'; ctx.beginPath(); ctx.ellipse(0,0,8,2,0,0,Math.PI*2); ctx.fill(); ctx.restore(); ctx.strokeStyle='rgba(10,72,255,0.35)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(px,py,9,0,Math.PI*2); ctx.stroke(); });
+  ctx.fillStyle='#0a48ff'; ctx.beginPath(); ctx.arc(12,0,3,0,Math.PI*2); ctx.fill();
+  if (battery<25){ ctx.fillStyle='#0a48ff'; ctx.font='700 8px Inter'; ctx.textAlign='center'; ctx.fillText('LOW',0,-15); }
+  ctx.restore();
+}
+function draw(){ ctx.clearRect(0,0,W,H); drawFogOfWar(); drawWaypoint(); entities.forEach(drawEntity); drawScanFX(); drawDrone(); }
+
+/* ====== UI ====== */
+function updateUI(){
+  const tl=Math.max(0,missionDuration-gameTime), m=Math.floor(tl/60), s=Math.floor(tl%60);
+  qs('timer').textContent=`${m}:${s.toString().padStart(2,'0')}`;
+  qs('scoreDisplay').textContent=score; qs('batteryPercent').textContent=Math.round(battery);
+  qs('truePositives').textContent=`${TP} / ${actualTotalWildfires}`;
+  qs('falsePositives').textContent=FP; qs('trueNegatives').textContent=TN; qs('falseNegatives').textContent=FN;
+  const t=findTargetInRange(); scanBtn.disabled = isScanning || !t || battery<SCAN_BATTERY_COST;
+  if (battery<SCAN_BATTERY_COST && !isScanning) scanBtn.textContent="🔋 LOW BATTERY";
+  else if (!t && !isScanning) scanBtn.textContent="🔍 NO TARGET";
+  else if (!isScanning) scanBtn.textContent="🔍 SCAN TARGET";
+}
+
+/* ====== Mission control ====== */
+function startMission(){
+  generateInitialTargets();
+  gameRunning=true; gameTime=0; lastAlertTime=0; score=0; TP=FP=TN=FN=0; battery=100; targetSelected=false;
+  isScanning=false; currentTarget=null; scanResultsPanel.classList.remove('show');
+  scanBtn.classList.remove('show','scanning'); scanBtn.disabled=false; scanBtn.textContent="🔍 SCAN TARGET";
+  qs('statusDisplay').textContent='Mission: Active';
+  drone = { x: canvas.width/2, y: canvas.height/2, vx:0, vy:0, angle:0, rotorPhase:0 };
+  targetPosition = { x: canvas.width/2, y: canvas.height/2 };
+  updateConfusionMatrix();
+  requestAnimationFrame(gameLoop);
+}
+function endMission(){
+  gameRunning=false; qs('statusDisplay').textContent='Mission: Complete';
+  const batteryBonus=Math.floor(battery*8); score+=batteryBonus;
+
+  const F = computeFinalConfusion();
+  const M = metricsFromFinal(F);
+
+  // Chips
+  qs('chipTotal').textContent = F.total;
+  qs('chipActPos').textContent = F.actPos;
+  const unresolvedCount = entities.filter(e=>!e.resolved).length;
+  qs('chipUnres').textContent = unresolvedCount;
+
+  // Metric values
+  qs('accuracyValue').textContent   = pct(M.accuracy);
+  qs('precisionValue').textContent  = pct(M.precision);
+  qs('recallValue').textContent     = pct(M.recall);
+  qs('f1Value').textContent         = pct(M.f1);
+  qs('specificityValue').textContent= pct(M.specificity);
+
+  // Final 2x2 + totals
+  qs('mTP').textContent = F.finalTP;
+  qs('mFP').textContent = F.finalFP;
+  qs('mFN').textContent = F.finalFN;
+  qs('mTN').textContent = F.finalTN;
+  qs('mPredPos').textContent = F.predPos;
+  qs('mPredNeg').textContent = F.predNeg;
+  qs('mActPos').textContent  = F.actPos;
+  qs('mActNeg').textContent  = F.actNeg;
+  qs('mTotal').textContent   = F.total;
+
+  // Score/blurb
+  let title="Mission Complete";
+  if (battery<=0) title="⚠ Battery Depleted!";
+  else if (M.f1>=0.85 && batteryBonus>400) title="🏆 Blueprint Mastery!";
+  else if (M.f1>=0.70) title="✅ Mission Success";
+  else title="📋 Needs Improvement";
+
+  qs('finalScore').textContent=score;
+  qs('batteryBonus').textContent=`Battery Bonus: +${batteryBonus}`;
+  // Put title at top of modal (reusing coord hud text would be noisy)
+  // Just reuse the chips row as the visual anchor; title optional.
+
+  qs('splash').classList.add('show');
+}
+
+/* Events */
+scanBtn.addEventListener('click', startScan);
+qs('resetBtn').addEventListener('click', startMission);
+qs('retryBtn').addEventListener('click', ()=>{ qs('splash').classList.remove('show'); startMission(); });
+qs('confirmBtn').addEventListener('click', ()=> resolveTarget(true));
+qs('dismissBtn').addEventListener('click', ()=> resolveTarget(false));
+qs('tutorialBtn').addEventListener('click', ()=> qs('tutorialOverlay').classList.add('show'));
+qs('closeTutorial').addEventListener('click', ()=>{ qs('tutorialOverlay').classList.remove('show'); if (!gameRunning) startMission(); });
+
+/* Init */
+setTimeout(()=> qs('tutorialOverlay').classList.add('show'), 250);
+</script>
+</body>
+</html>

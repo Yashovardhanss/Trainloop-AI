@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F1 Score Visualization</title>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap');
+        
+        :root {
+            --bg-color: #F0F4FF;
+            --dot-color: #D8DEEB;
+            --container-bg: #FFFFFF;
+            --stroke-color: #0D2A5F;
+            --fill-color: rgba(179, 200, 242, 0.4);
+            --precision-color: #3B66F5;
+            --recall-color: #2ECC71;
+            --f1-color: #E74C3C;
+            --text-color: #0D2A5F;
+            --text-muted-color: #6A7B9D;
+        }
+
+        body {
+            font-family: 'Roboto Mono', 'Courier New', monospace;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+            background-size: 16px 16px;
+            color: var(--text-color);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px 0;
+        }
+        .container {
+            width: 90%;
+            max-width: 900px;
+            background-color: var(--container-bg);
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 0 0 1px var(--stroke-color);
+            border: 5px solid var(--container-bg);
+        }
+        h1, h2 {
+            text-align: center;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-top: 0;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        h1 {
+            font-size: 1.6em;
+            border-bottom: 1px solid var(--stroke-color);
+            padding-bottom: 15px;
+            margin-bottom: 10px;
+        }
+        h2 {
+            font-size: 0.9em;
+            font-weight: 400;
+            color: var(--text-muted-color);
+            margin-bottom: 25px;
+        }
+        .visualization-area {
+            position: relative;
+            border: 1px solid var(--stroke-color);
+            padding: 10px;
+            border-radius: 4px;
+        }
+        svg {
+            width: 100%;
+            height: auto;
+            display: block;
+            overflow: visible;
+        }
+        .axis-label, .legend-label {
+            font-size: 12px;
+            fill: var(--text-muted-color);
+            font-weight: 500;
+            text-transform: uppercase;
+        }
+        .grid-line {
+            stroke: var(--dot-color);
+            stroke-width: 1;
+            stroke-dasharray: 2 2;
+        }
+        .curve {
+            fill: none;
+            stroke-width: 2.5;
+        }
+        .precision-curve { stroke: var(--precision-color); }
+        .recall-curve { stroke: var(--recall-color); }
+        
+        .static-node {
+            fill: var(--container-bg);
+            stroke-width: 1.5;
+            r: 4;
+        }
+        .precision-node { stroke: var(--precision-color); }
+        .recall-node { stroke: var(--recall-color); }
+
+        .moving-dot {
+            r: 7;
+            stroke-width: 3;
+            stroke: var(--container-bg);
+        }
+        .precision-dot { fill: var(--precision-color); }
+        .recall-dot { fill: var(--recall-color); }
+
+        .connector-line {
+            stroke: var(--stroke-color);
+            stroke-width: 1.5;
+            stroke-dasharray: 4 4;
+            opacity: 0.7;
+        }
+        
+        #formula-container {
+            font-size: 16px;
+            color: var(--text-color);
+        }
+
+        .calculation-box {
+            margin-top: 25px;
+            padding: 20px;
+            background-color: var(--fill-color);
+            border-radius: 4px;
+            border: 1px solid var(--stroke-color);
+            font-size: 1em;
+            line-height: 1.8;
+            min-height: 100px;
+        }
+        .calc-step { color: var(--text-color); font-weight: bold; }
+        .calc-value { font-weight: bold; }
+        .precision-value { color: var(--precision-color); }
+        .recall-value { color: var(--recall-color); }
+        .f1-value { color: var(--f1-color); }
+        .calc-comment { color: var(--text-muted-color); }
+        
+        .controls {
+            margin-top: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+        }
+        .slider-label {
+            font-size: 0.9em;
+            font-weight: 500;
+            color: var(--text-color);
+        }
+        .slider-wrapper {
+            width: 80%;
+            position: relative;
+        }
+        input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+            -webkit-appearance: none;
+            appearance: none;
+            background: transparent;
+        }
+        input[type="range"]::-webkit-slider-runnable-track {
+            height: 4px;
+            background: var(--dot-color);
+            border-radius: 2px;
+        }
+        input[type="range"]::-moz-range-track {
+            height: 4px;
+            background: var(--dot-color);
+            border-radius: 2px;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            margin-top: -6px;
+            height: 16px;
+            width: 16px;
+            background: var(--stroke-color);
+            border-radius: 50%;
+            border: 2px solid var(--container-bg);
+        }
+        input[type="range"]::-moz-range-thumb {
+            height: 12px;
+            width: 12px;
+            background: var(--stroke-color);
+            border-radius: 50%;
+            border: 2px solid var(--container-bg);
+        }
+
+        .final-f1-display {
+            font-weight: 700;
+            font-size: 1.5em;
+        }
+        .final-f1-display .label {
+            color: var(--text-muted-color);
+            font-weight: 400;
+        }
+        .final-f1-display .value {
+            color: var(--f1-color);
+            margin-left: 10px;
+        }
+
+        .explanation-section {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid var(--stroke-color);
+        }
+        .explanation-section h3 {
+            text-align: center;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 15px;
+        }
+        .explanation-section p {
+            color: var(--text-color);
+            line-height: 1.8;
+            font-size: 0.95em;
+        }
+        .explanation-section strong.precision { color: var(--precision-color); }
+        .explanation-section strong.recall { color: var(--recall-color); }
+
+    
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .container {
+                padding: 20px;
+            }
+            h1 { font-size: 1.3em; }
+            h2 { font-size: 0.8em; }
+            .final-f1-display { font-size: 1.2em; }
+            svg { height: auto; }
+        }
+        @media (max-width: 480px) {
+            body { padding: 10px; }
+            .container { padding: 15px; }
+            h1 { font-size: 1.1em; }
+            h2 { font-size: 0.75em; }
+            .slider-wrapper { width: 100%; }
+            .final-f1-display { font-size: 1em; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>F1 Score Visualization</h1>
+    <h2>Exploring the Harmonic Mean of Precision & Recall</h2>
+
+    <div class="visualization-area">
+        <svg id="chart" viewBox="0 0 800 400">
+            <!-- Definitions for markers -->
+            <defs>
+                <marker id="marker-precision" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <circle cx="5" cy="5" r="4" fill="var(--precision-color)" />
+                </marker>
+                <marker id="marker-recall" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+                    <polygon points="5,1 9,9 1,9" fill="var(--recall-color)" />
+                </marker>
+            </defs>
+
+            <!-- Grid and Axes -->
+            <g id="grid-group"></g>
+            <g id="axes-group">
+                <line x1="50" y1="350" x2="750" y2="350" stroke="var(--stroke-color)" stroke-width="1.5"/>
+                <line x1="50" y1="350" x2="50" y2="50" stroke="var(--stroke-color)" stroke-width="1.5"/>
+                <text x="400" y="390" class="axis-label" text-anchor="middle">Threshold (t)</text>
+                <text x="15" y="200" class="axis-label" transform="rotate(-90, 15, 200)" text-anchor="middle">Metric Value</text>
+            </g>
+            
+            <!-- Curves and Static Points -->
+            <g id="curves-group">
+                <path id="precision-curve" class="curve precision-curve"></path>
+                <path id="recall-curve" class="curve recall-curve"></path>
+            </g>
+            <g id="static-nodes-group"></g>
+
+            <!-- Dynamic Elements -->
+            <g id="dynamic-elements-group">
+                <line id="connector-line" class="connector-line"></line>
+                <circle id="precision-dot" class="moving-dot precision-dot"></circle>
+                <circle id="recall-dot" class="moving-dot recall-dot"></circle>
+                <foreignObject id="formula-container" width="150" height="70">
+                    <div xmlns="http://www.w3.org/1999/xhtml" id="formula-display"></div>
+                </foreignObject>
+            </g>
+
+            <!-- Legend -->
+            <g id="legend-group" transform="translate(600, 40)">
+                <circle cx="0" cy="0" r="5" fill="var(--precision-color)"></circle>
+                <text x="15" y="5" class="legend-label">Precision</text>
+                <circle cx="0" cy="25" r="5" fill="var(--recall-color)"></circle>
+                <text x="15" y="30" class="legend-label">Recall</text>
+            </g>
+        </svg>
+    </div>
+
+    <div class="calculation-box" id="calculation-box">
+        <span class="calc-comment">// Move the slider to begin the calculation</span>
+    </div>
+
+    <div class="controls">
+        <div class="slider-label">Threshold Parameter (t)</div>
+        <div class="slider-wrapper">
+            <input type="range" id="t-slider" min="0" max="1" step="0.005" value="0.5">
+        </div>
+        <div id="final-f1-display" class="final-f1-display">
+            <span class="label">Current F1 Score =</span>
+            <span id="f1-value-display" class="value">0.00</span>
+        </div>
+    </div>
+
+    <div class="explanation-section">
+        <h3>How This Visualization Works</h3>
+        <p>
+            The F1 score is a popular metric for classification tasks, especially with imbalanced datasets. It elegantly combines two other key metrics: <strong class="precision">Precision</strong> and <strong class="recall">Recall</strong>.
+            The slider represents a changing <strong>decision threshold</strong> in a model.
+        </p>
+        <p>
+            As you move the slider, you trace a path along both curves. Notice their inverse relationship: typically, as you adjust the threshold to increase <strong class="recall">Recall</strong> (capturing more true positives), you often sacrifice <strong class="precision">Precision</strong> (introducing more false positives), and vice-versa. The F1 score, as the <strong>harmonic mean</strong> of the two, seeks a balance. It is highest when both Precision and Recall are high and balanced.
+        </p>
+    </div>
+</div>
+
+<script>
+    const svgNS = "http://www.w3.org/2000/svg";
+
+    // --- DOM ELEMENTS ---
+    const slider = document.getElementById('t-slider');
+    const precisionCurve = document.getElementById('precision-curve');
+    const recallCurve = document.getElementById('recall-curve');
+    const precisionDot = document.getElementById('precision-dot');
+    const recallDot = document.getElementById('recall-dot');
+    const connectorLine = document.getElementById('connector-line');
+    const formulaContainer = document.getElementById('formula-container');
+    const formulaDisplay = document.getElementById('formula-display');
+    const calcBox = document.getElementById('calculation-box');
+    const f1ValueDisplay = document.getElementById('f1-value-display');
+    const gridGroup = document.getElementById('grid-group');
+    const axesGroup = document.getElementById('axes-group');
+    const staticNodesGroup = document.getElementById('static-nodes-group');
+
+    // --- SVG & CHART CONSTANTS ---
+    const SVG_WIDTH = 800;
+    const SVG_HEIGHT = 400;
+    const MARGIN = { top: 50, right: 50, bottom: 50, left: 50 };
+    const CHART_WIDTH = SVG_WIDTH - MARGIN.left - MARGIN.right;
+    const CHART_HEIGHT = SVG_HEIGHT - MARGIN.top - MARGIN.bottom;
+
+    // --- DATA POINTS (in [0, 1] space) ---
+    const precisionPoints = [ {x: 0, y: 0.98}, {x: 0.1, y: 0.95}, {x: 0.3, y: 0.85}, {x: 0.6, y: 0.65}, {x: 0.8, y: 0.50}, {x: 1, y: 0.40} ];
+    const recallPoints = [ {x: 0, y: 0.10}, {x: 0.1, y: 0.30}, {x: 0.3, y: 0.65}, {x: 0.6, y: 0.88}, {x: 0.8, y: 0.95}, {x: 1, y: 0.99} ];
+
+    // --- SCALING FUNCTIONS ---
+    const xScale = (x) => MARGIN.left + x * CHART_WIDTH;
+    const yScale = (y) => MARGIN.top + (1 - y) * CHART_HEIGHT;
+    const unscaleY = (y) => 1 - (y - MARGIN.top) / CHART_HEIGHT;
+
+    // --- INITIALIZATION ---
+    function init() {
+        drawGridAndAxes();
+        drawCurves();
+        slider.addEventListener('input', () => updateVisuals(parseFloat(slider.value)));
+        updateVisuals(parseFloat(slider.value));
+    }
+
+    function drawGridAndAxes() {
+        // Grid lines
+        for (let i = 0; i <= 10; i++) {
+            const val = i / 10;
+            // Horizontal
+            const y = yScale(val);
+            const hLine = document.createElementNS(svgNS, 'line');
+            hLine.setAttribute('x1', MARGIN.left);
+            hLine.setAttribute('y1', y);
+            hLine.setAttribute('x2', MARGIN.left + CHART_WIDTH);
+            hLine.setAttribute('y2', y);
+            hLine.setAttribute('class', 'grid-line');
+            gridGroup.appendChild(hLine);
+
+            // Vertical
+            const x = xScale(val);
+            const vLine = document.createElementNS(svgNS, 'line');
+            vLine.setAttribute('x1', x);
+            vLine.setAttribute('y1', MARGIN.top);
+            vLine.setAttribute('x2', x);
+            vLine.setAttribute('y2', MARGIN.top + CHART_HEIGHT);
+            vLine.setAttribute('class', 'grid-line');
+            gridGroup.appendChild(vLine);
+
+            // Y-axis labels
+            const yLabel = document.createElementNS(svgNS, 'text');
+            yLabel.setAttribute('x', MARGIN.left - 10);
+            yLabel.setAttribute('y', y + 4);
+            yLabel.setAttribute('class', 'axis-label');
+            yLabel.setAttribute('text-anchor', 'end');
+            yLabel.textContent = val.toFixed(1);
+            axesGroup.appendChild(yLabel);
+        }
+    }
+
+    function createPathString(points) {
+        const pathData = points.map((p, i) => {
+            const command = i === 0 ? 'M' : 'L';
+            return `${command} ${xScale(p.x)} ${yScale(p.y)}`;
+        }).join(' ');
+        return pathData;
+    }
+    
+    function drawCurves() {
+        precisionCurve.setAttribute('d', createPathString(precisionPoints));
+        recallCurve.setAttribute('d', createPathString(recallPoints));
+
+        // Draw static hollow nodes
+        [precisionPoints, recallPoints].forEach((points, index) => {
+            const className = index === 0 ? 'precision-node' : 'recall-node';
+            points.forEach(p => {
+                const circle = document.createElementNS(svgNS, 'circle');
+                circle.setAttribute('cx', xScale(p.x));
+                circle.setAttribute('cy', yScale(p.y));
+                circle.setAttribute('class', `static-node ${className}`);
+                staticNodesGroup.appendChild(circle);
+            });
+        });
+    }
+
+    // --- UPDATE LOGIC ---
+    function updateVisuals(t) {
+        const pPathLength = precisionCurve.getTotalLength();
+        const rPathLength = recallCurve.getTotalLength();
+
+        const pPoint = precisionCurve.getPointAtLength(t * pPathLength);
+        const rPoint = recallCurve.getPointAtLength(t * rPathLength);
+
+        // Update moving dots
+        precisionDot.setAttribute('cx', pPoint.x);
+        precisionDot.setAttribute('cy', pPoint.y);
+        recallDot.setAttribute('cx', rPoint.x);
+        recallDot.setAttribute('cy', rPoint.y);
+
+        // Update connector line
+        connectorLine.setAttribute('x1', pPoint.x);
+        connectorLine.setAttribute('y1', pPoint.y);
+        connectorLine.setAttribute('x2', rPoint.x);
+        connectorLine.setAttribute('y2', rPoint.y);
+
+        // Calculate metric values
+        const pValue = unscaleY(pPoint.y);
+        const rValue = unscaleY(rPoint.y);
+        const f1Value = (pValue + rValue > 0) ? (2 * pValue * rValue) / (pValue + rValue) : 0;
+
+        // Update formula position and content
+        const midX = (pPoint.x + rPoint.x) / 2;
+        const midY = (pPoint.y + rPoint.y) / 2;
+        formulaContainer.setAttribute('x', midX - 75);
+        formulaContainer.setAttribute('y', midY - 35);
+        formulaDisplay.innerHTML = `$$F_1 = \\frac{2 \\cdot P \\cdot R}{P+R}$$`;
+        if (window.MathJax) {
+            MathJax.typesetPromise([formulaDisplay]);
+        }
+        
+        // Update calculation box
+        updateCalculationBox(pValue, rValue, f1Value);
+
+        // Update final F1 display
+        f1ValueDisplay.textContent = f1Value.toFixed(3);
+    }
+
+    function updateCalculationBox(p, r, f1) {
+        calcBox.innerHTML = `
+            <div>
+                <span class="calc-step">Precision (P):</span>
+                <span class="calc-value precision-value">${p.toFixed(3)}</span>
+            </div>
+            <div>
+                <span class="calc-step">Recall (R):</span>
+                <span class="calc-value recall-value">${r.toFixed(3)}</span>
+            </div>
+            <br>
+            <div>
+                <span class="calc-step">F1 Score = 2 * (P * R) / (P + R)</span>
+                <br>
+                <span class="calc-value f1-value">
+                    = 2 * (${p.toFixed(3)} * ${r.toFixed(3)}) / (${p.toFixed(3)} + ${r.toFixed(3)})
+                    = ${f1.toFixed(3)}
+                </span>
+            </div>
+        `;
+    }
+
+    init();
+</script>
+</body>
+</html>
