@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>R² Target Practice — Clean Blueprint</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root{
+      --bg:#fbfdff;
+      --dots:#e5efff;
+      --axis:#bfd6ff;
+      --grid:#eaf2ff;
+      --ink:#0c3e88;
+      --muted:#3c63a1;
+      --accent:#1f5fff;
+      --accent-2:#77a8ff;
+      --good:#1db954;
+      --bad:#e35151;
+      --edge:#d9e8ff;
+      --panel:#ffffff;
+      --radius:12px;
+      --sidebar-w: 300px;
+      --shadow: 0 10px 24px rgba(12,62,136,0.06);
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
+
+    /* Layout: slim left rail + stage (no header) */
+    .app{
+      display:grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+      grid-template-rows: 100vh;
+      height:100vh;
+      overflow:hidden;
+    }
+
+    aside{
+      padding:14px;
+      border-right:1px solid var(--edge);
+      background:linear-gradient(180deg,#ffffffee,#ffffffcc);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      overflow:auto;
+    }
+
+    .panel{
+      background:var(--panel);
+      border:1px solid var(--edge);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:12px 14px;
+      margin-bottom:12px;
+    }
+
+    .panel h2{
+      margin:0 0 6px 0;
+      font-size:0.95rem;
+      letter-spacing:0.2px;
+      color:#0f3d86;
+    }
+    .panel p{
+      margin:0;
+      font-size:0.86rem;
+      line-height:1.45;
+      color:var(--muted);
+    }
+    .bul{
+      margin:8px 0 0 0;
+      padding-left:14px;
+    }
+    .bul li{
+      margin:4px 0;
+      font-size:0.84rem;
+      color:#456aa3;
+    }
+
+    /* Compact controls */
+    .control{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:8px 10px;
+      align-items:center;
+      margin:8px 0;
+    }
+    .control label{
+      grid-column:1 / -1;
+      font-weight:700;
+      font-size:0.82rem;
+      color:#1b4fa2;
+      letter-spacing:.2px;
+    }
+    .slider-wrap{
+      display:flex; align-items:center; gap:8px;
+      background:#f6faff; border:1px solid var(--edge); border-radius:999px; padding:6px 10px;
+    }
+    input[type="range"]{
+      -webkit-appearance:none; appearance:none;
+      width:100%; height:6px; border-radius:999px; outline:none;
+      background:linear-gradient(90deg,var(--accent),var(--accent-2));
+    }
+    input[type="range"]::-webkit-slider-thumb{
+      -webkit-appearance:none; appearance:none;
+      width:16px; height:16px; border-radius:50%;
+      background:#fff; border:2px solid var(--accent);
+      box-shadow:0 1px 4px rgba(0,0,0,.15);
+    }
+    .chip{
+      min-width:54px; text-align:center; font-variant-numeric: tabular-nums;
+      padding:6px 8px; border-radius:8px; border:1px solid var(--edge);
+      background:#f3f8ff; color:#184c99; font-weight:700; font-size:0.82rem;
+    }
+
+    .btn{
+      width:100%; border:none; border-radius:10px; padding:10px 12px;
+      background:(135deg,#9be8b2,#1db954);
+      color:#6495ED; font-weight:800; cursor:pointer;
+    }
+
+    .score{font-weight:800; font-size:.95rem; letter-spacing:.2px; color:#0d4092}
+
+    /* Stage */
+    main{position:relative; overflow:hidden;}
+    .stage{position:absolute; inset:0; padding:12px;}
+    /* Dotted blueprint background like the image */
+    .stage::before{
+      content:""; position:absolute; inset:0;
+      background-image: radial-gradient(var(--dots) 1px, transparent 1px);
+      background-size: 16px 16px; opacity:.9; pointer-events:none;
+    }
+
+    /* Gauge */
+    .gauge{width:132px;height:132px;border-radius:50%;margin:6px auto 4px auto;display:grid;place-items:center;
+      background: conic-gradient(var(--accent) 0deg, #e5edff 0deg);
+      border:1px solid var(--edge);}
+    .gauge-inner{width:104px;height:104px;border-radius:50%;
+      background:linear-gradient(#fff,#f7fbff); display:grid; place-items:center; border:1px solid var(--edge)}
+    #r2-value{font-weight:800;font-size:1.4rem;color:#0e4aa2}
+    #r2-text{margin-top:2px;text-align:center;font-weight:700;color:#3d65a4;font-size:.85rem}
+
+    @media (max-width: 920px){ :root{ --sidebar-w: 280px } }
+    @media (max-width: 730px){ :root{ --sidebar-w: 260px } }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <!-- Left rail: R² explainer + compact controls + score/gauge -->
+    <aside>
+      <div class="panel">
+        <h2>What is R² (Coefficient of Determination)?</h2>
+        <p>R² measures how much of the variation in the points is explained by your line.</p>
+        <ul class="bul">
+          <li><strong>Range:</strong> 0 to 1 (higher is better)</li>
+          <li><strong>R² = 1:</strong> all points lie on the line (perfect fit)</li>
+          <li><strong>Computation:</strong> R² = 1 − SSE/SST, where SSE is the sum of squared residuals and SST is total variance around the mean.</li>
+        </ul>
+      </div>
+
+      <div class="panel">
+        <div class="control">
+          <label for="slope">Angle (Slope)</label>
+          <div class="slider-wrap">
+            <input type="range" id="slope" min="-2" max="2" step="0.01" value="0">
+            <span class="chip" id="slopeVal">0.00</span>
+          </div>
+
+          <label for="intercept" style="margin-top:6px">Height (Intercept)</label>
+          <div class="slider-wrap">
+            <input type="range" id="intercept" min="-5" max="5" step="0.01" value="0">
+            <span class="chip" id="interceptVal">0.00</span>
+          </div>
+        </div>
+        <button class="btn" id="newRound" style="margin-top:8px">Reset</button>
+      </div>
+
+      <div class="panel" style="text-align:center">
+        <div class="gauge" id="gauge"><div class="gauge-inner"><span id="r2-value">0%</span></div></div>
+        <div id="r2-text">Model Fit</div>
+      </div>
+
+      <div class="panel">
+        <div class="score" id="score">Total Score: 0</div>
+        <p style="margin:6px 0 0 0; font-size:.85rem; color:#557bb3">Tip: make the solid line follow the center of the cloud; shorter red bars → higher R².</p>
+      </div>
+    </aside>
+
+    <!-- Diagram stage (SVG) -->
+    <main>
+      <div class="stage">
+        <svg id="svg" viewBox="-11 -11 22 22" preserveAspectRatio="xMidYMid meet" style="width:100%;height:100%">
+          <!-- faint arc hint (style from reference image) -->
+          <path id="arcHint" d="" fill="none" stroke="#fffff" stroke-width="0.06" stroke-dasharray="0.6 0.6" opacity="0.55"/>
+
+          <!-- axes (straight, blueprint-thin) -->
+          <g stroke="var(--axis)" stroke-width="0.04">
+            <line x1="-10" y1="0" x2="10" y2="0"/>
+            <line x1="0" y1="-10" x2="0" y2="10"/>
+          </g>
+
+          <!-- light grid lines every 2 units -->
+          <g stroke="var(--grid)" stroke-width="0.03">
+            <g id="gridX"></g>
+            <g id="gridY"></g>
+          </g>
+
+          <!-- mean line (dashed) -->
+          <line id="meanLine" x1="-10" y1="0" x2="10" y2="0"
+                stroke="#7aa0ea" stroke-width="0.08" stroke-dasharray="0.6 0.4" opacity="0.9"/>
+
+          <!-- model line (solid blueprint) -->
+          <line id="modelLine" x1="-10" y1="0" x2="10" y2="0"
+                stroke="var(--accent)" stroke-width="0.12" stroke-linecap="round"/>
+
+          <!-- error bars -->
+          <g id="errors" stroke="var(--bad)" stroke-width="0.08" stroke-linecap="round"></g>
+
+          <!-- points -->
+          <g id="points" fill="#2563ff" stroke="#1e53d8" stroke-width="0.06"></g>
+
+          <!-- center label like the screenshot -->
+          <text id="tLabel" x="0" y="0" text-anchor="middle" fill="#1d49a7" font-size="0.7"
+                style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;">
+            R² = 0.00
+          </text>
+        </svg>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    // --- controls
+    const slopeEl = document.getElementById('slope');
+    const interceptEl = document.getElementById('intercept');
+    const slopeVal = document.getElementById('slopeVal');
+    const interceptVal = document.getElementById('interceptVal');
+    const newRoundBtn = document.getElementById('newRound');
+
+    // --- UI
+    const r2ValueEl = document.getElementById('r2-value');
+    const gaugeEl = document.getElementById('gauge');
+    const r2TextEl = document.getElementById('r2-text');
+    const scoreEl = document.getElementById('score');
+    const tLabel = document.getElementById('tLabel');
+
+    // --- SVG refs
+    const svg = document.getElementById('svg');
+    const pointsGroup = document.getElementById('points');
+    const errorsGroup = document.getElementById('errors');
+    const modelLine = document.getElementById('modelLine');
+    const meanLine = document.getElementById('meanLine');
+    const gridX = document.getElementById('gridX');
+    const gridY = document.getElementById('gridY');
+    const arcHint = document.getElementById('arcHint');
+
+    // blueprint grid lines
+    for(let x=-10; x<=10; x+=2){
+      if(x!==0){
+        const ln=document.createElementNS("http://www.w3.org/2000/svg","line");
+        ln.setAttribute('x1', x); ln.setAttribute('y1', -10);
+        ln.setAttribute('x2', x); ln.setAttribute('y2', 10);
+        gridX.appendChild(ln);
+      }
+    }
+    for(let y=-10; y<=10; y+=2){
+      if(y!==0){
+        const ln=document.createElementNS("http://www.w3.org/2000/svg","line");
+        ln.setAttribute('x1', -10); ln.setAttribute('y1', y);
+        ln.setAttribute('x2', 10);  ln.setAttribute('y2', y);
+        gridY.appendChild(ln);
+      }
+    }
+
+    // helpers
+    let data = [];
+    let totalScore = 0;
+    function rand(a,b){ return a + Math.random()*(b-a); }
+
+    function arcPath(){
+      // light dashed arc (purely decorative, like the screenshot)
+      const r = 8.2, cx = 0, cy = 9.5;
+      const start = polar(cx,cy,r, 200);
+      const end   = polar(cx,cy,r, -20);
+      return `M ${start.x} ${start.y} A ${r} ${r} 0 0 1 ${end.x} ${end.y}`;
+    }
+    function polar(cx,cy,r,deg){
+      const th = deg*Math.PI/180;
+      return { x: cx + r*Math.cos(th), y: cy + r*Math.sin(th) };
+    }
+
+    function newRound(){
+      pointsGroup.innerHTML = '';
+      errorsGroup.innerHTML = '';
+      arcHint.setAttribute('d', arcPath());
+
+      // Generate linear-ish dataset
+      data = [];
+      const tSlope = rand(-1.1, 1.1);
+      const tInt = rand(-2.2, 2.2);
+      const noise = rand(0.5, 1.5);
+      for(let i=0;i<26;i++){
+        const x = rand(-9, 9);
+        const y = tSlope*x + tInt + rand(-noise, noise);
+        data.push({x,y});
+      }
+
+      // Draw points
+      for(const p of data){
+        const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+        c.setAttribute('cx', p.x); c.setAttribute('cy', p.y); c.setAttribute('r', 0.18);
+        pointsGroup.appendChild(c);
+      }
+
+      // Mean line
+      const meanY = data.reduce((s,p)=>s+p.y,0)/data.length;
+      meanLine.setAttribute('y1', meanY);
+      meanLine.setAttribute('y2', meanY);
+
+      // Reset controls (0 slope, intercept at mean)
+      slopeEl.value = 0;
+      interceptEl.value = meanY.toFixed(2);
+      slopeVal.textContent = "0.00";
+      interceptVal.textContent = Number(meanY).toFixed(2);
+
+      updateModel();
+    }
+
+    function updateModel(){
+      const m = parseFloat(slopeEl.value);
+      const b = parseFloat(interceptEl.value);
+      slopeVal.textContent = m.toFixed(2);
+      interceptVal.textContent = b.toFixed(2);
+
+      // Update model line endpoints at x=-10..10
+      const y1 = m*(-10) + b;
+      const y2 = m*(10) + b;
+      modelLine.setAttribute('y1', y1);
+      modelLine.setAttribute('y2', y2);
+
+      // R² + redraw error bars
+      const meanY = data.reduce((s,p)=>s+p.y,0)/data.length;
+      let sse=0, sst=0;
+      errorsGroup.innerHTML = '';
+
+      for(const p of data){
+        const yHat = m*p.x + b;
+        const resid = p.y - yHat;
+        sse += resid*resid;
+        const dev = p.y - meanY;
+        sst += dev*dev;
+
+        // centered error bar
+        const midY = (p.y + yHat)/2;
+        const line = document.createElementNS("http://www.w3.org/2000/svg","line");
+        line.setAttribute('x1', p.x); line.setAttribute('x2', p.x);
+        line.setAttribute('y1', midY - Math.abs(resid)/2);
+        line.setAttribute('y2', midY + Math.abs(resid)/2);
+        errorsGroup.appendChild(line);
+      }
+
+      let r2 = 1;
+      if (sst !== 0) r2 = 1 - (sse/sst);
+
+      const disp = Math.max(0, r2); // gauge display
+      const pct = disp*100;
+      r2ValueEl.textContent = `${pct.toFixed(1)}%`;
+      tLabel.textContent = `R² = ${(Math.max(0, r2)).toFixed(2)}`;
+      gaugeEl.style.background = `conic-gradient(var(--accent) ${pct*3.6}deg, #e5edff ${pct*3.6}deg)`;
+
+      let label="Model Fit";
+      if (pct>98) label="Perfect Fit!";
+      else if (pct>90) label="Excellent Fit!";
+      else if (pct>75) label="Great Fit";
+      else if (pct>55) label="Good Fit";
+      else if (pct>35) label="Moderate Fit";
+      else label="Poor Fit";
+      r2TextEl.textContent = label;
+    }
+
+    // events
+    slopeEl.addEventListener('input', updateModel);
+    interceptEl.addEventListener('input', updateModel);
+    newRoundBtn.addEventListener('click', newRound);
+
+    // init
+    newRound();
+  </script>
+</body>
+</html>

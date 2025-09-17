@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>MSE — Residual Lollipop + RMSE Square</title>
+<style>
+  :root{
+    --blue:#3b82f6;      /* primary */
+    --grid:#dbeafe;      /* dotted grid */
+    --bg:#f0f5ff;        /* page bg */
+    --panel:#fdfdff;     /* card bg */
+    --panel-border:#e0e7ff;
+    --ink:#0f172a;
+    --green:#16a34a;
+    --muted:#64748b;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; min-height:100vh; padding:16px;
+    display:grid; grid-template-columns:320px 1fr; gap:16px;
+    align-items:center; justify-items:center;
+    background:var(--bg); color:var(--ink);
+    font-family:"Courier New", Courier, monospace;
+  }
+  .panel{
+    width:300px; max-width:95vw; padding:14px;
+    background:var(--panel); border:1px solid var(--panel-border);
+    border-radius:12px; box-shadow:0 10px 30px rgba(59,130,246,0.08);
+  }
+  .panel h2{ margin:0 0 8px; color:var(--blue); text-align:center; font-size:18px; letter-spacing:.3px; }
+  .row{ display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; margin:8px 0; font-size:13px; }
+  .row .val{ width:64px; text-align:right; color:var(--muted); }
+  input[type="range"]{ width:100%; }
+  details{ margin-top:10px; border-top:1px dashed var(--panel-border); padding-top:10px; }
+  summary{ cursor:pointer; list-style:none; user-select:none; color:var(--blue); font-weight:bold; font-size:13px; }
+  summary::-webkit-details-marker{ display:none; }
+  .adv{ margin-top:8px; }
+  .btns{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px; }
+  button{
+    padding:8px 10px; border:1px solid var(--panel-border); border-radius:10px;
+    background:#fff; cursor:pointer; font-family:inherit;
+  }
+  button.primary{ background:var(--blue); color:#fff; border-color:var(--blue); }
+  .readout{
+    margin-top:10px; border-top:1px dashed var(--panel-border);
+    padding-top:10px; font-size:13px; line-height:1.6; text-align:center;
+  }
+  .readout small{ color:var(--muted); }
+
+  .canvas-wrap{
+    width:min(1000px,95vw); padding:8px;
+    background:var(--panel); border:1px solid var(--panel-border);
+    border-radius:12px; box-shadow:0 10px 30px rgba(59,130,246,0.08);
+  }
+  .subtitle{ text-align:center; color:var(--blue); font-size:14px; margin:4px 0 6px; }
+  .legend{ display:flex; gap:16px; justify-content:center; font-size:12px; color:var(--muted); margin:0 0 6px; }
+  .key{ display:flex; align-items:center; gap:6px; }
+  .dot{ width:10px; height:10px; border-radius:50%; background:var(--blue); }
+  .line{ width:14px; height:2px; background:var(--green); }
+  .square{ width:10px; height:10px; border:2px solid var(--blue); opacity:.25; }
+  .hint{ text-align:center; font-size:12px; color:var(--muted); margin-top:6px; }
+</style>
+</head>
+<body>
+
+  <!-- Controls -->
+  <div class="panel">
+    <h2>Controls</h2>
+
+    <div class="row">
+      <label for="aRange">Slope a (ŷ = a·x + b)</label>
+      <span class="val" id="aVal">0.80</span>
+    </div>
+    <input id="aRange" type="range" min="-3" max="3" step="0.01" value="0.80" aria-label="Slope a">
+
+    <div class="row" style="margin-top:10px;">
+      <label for="bRange">Intercept b</label>
+      <span class="val" id="bVal">0.50</span>
+    </div>
+    <input id="bRange" type="range" min="-2" max="2" step="0.01" value="0.50" aria-label="Intercept b">
+
+    <details>
+      <summary>Advanced</summary>
+      <div class="adv">
+        <div class="row">
+          <label for="nRange">N (points)</label>
+          <span class="val" id="nVal">30</span>
+        </div>
+        <input id="nRange" type="range" min="5" max="100" step="1" value="30" aria-label="Number of points">
+
+        <div class="row" style="margin-top:10px;">
+          <label for="noiseRange">Noise σ</label>
+          <span class="val" id="noiseVal">0.35</span>
+        </div>
+        <input id="noiseRange" type="range" min="0" max="1.2" step="0.01" value="0.35" aria-label="Noise sigma">
+
+        <div class="row" style="margin-top:10px;">
+          <label for="lrRange">Learning rate η</label>
+          <span class="val" id="lrVal">0.040</span>
+        </div>
+        <input id="lrRange" type="range" min="0.001" max="0.2" step="0.001" value="0.040" aria-label="Learning rate">
+      </div>
+    </details>
+
+    <div class="btns">
+      <button id="regenBtn">Regenerate</button>
+      <button id="playBtn" class="primary">▶ Play (GD)</button>
+    </div>
+
+    <div class="readout" id="readout">
+      <div><b>MSE</b> = (1/N) Σ (y − ŷ)²</div>
+      <div id="mseVal"><b>Current MSE</b> = —</div>
+      <div id="nCount"><small>Dots (N) = —</small></div>
+      <div><small>Blue mini-squares show each <b>(y − ŷ)²</b> by area; the big square shows <b>RMSE</b> as side length.</small></div>
+      <div id="hoverInfo"><small>Hover: <b>y</b>=—, <b>ŷ</b>=—, <b>r</b>=—, <b>r²</b>=—</small></div>
+    </div>
+  </div>
+
+  <!-- Visualization -->
+  <div class="canvas-wrap">
+    <div class="subtitle">Residual Lollipop + RMSE Square</div>
+    <div class="legend">
+      <div class="key"><span class="dot"></span> data point</div>
+      <div class="key"><span class="line"></span> fit line (mini)</div>
+      <div class="key"><span class="square"></span> squared error area</div>
+    </div>
+
+    <!-- Single SVG with dotted grid background; left = mini scatter, right = residual lollipops + RMSE -->
+    <svg id="viz" width="980" height="560" viewBox="0 0 980 560" xmlns="http://www.w3.org/2000/svg" aria-label="MSE residual visualization">
+      <defs>
+        <pattern id="dot-grid" width="12" height="12" patternUnits="userSpaceOnUse">
+          <circle cx="1" cy="1" r="0.5" fill="#dbeafe" />
+        </pattern>
+        <clipPath id="miniClip"><rect x="30" y="30" width="360" height="240" rx="8"/></clipPath>
+        <clipPath id="residClip"><rect x="410" y="30" width="540" height="420" rx="8"/></clipPath>
+      </defs>
+
+      <!-- Background dotted grid -->
+      <rect x="0" y="0" width="100%" height="100%" fill="url(#dot-grid)"/>
+
+      <!-- PANELS -->
+      <!-- Mini scatter (context) -->
+      <g id="miniPanel">
+        <rect x="30" y="30" width="360" height="240" fill="#fdfdff" stroke="#e0e7ff" rx="8"/>
+        <g clip-path="url(#miniClip)">
+          <!-- Axes -->
+          <g stroke="#3b82f6" stroke-width="1.2" opacity="0.9">
+            <path d="M 60 250 L 60 60" />
+            <path d="M 60 250 L 360 250" />
+          </g>
+          <!-- Groups -->
+          <g id="miniPoints"></g>
+          <path id="miniLine" fill="none" stroke="#16a34a" stroke-width="2.0" stroke-linecap="round" />
+        </g>
+        <text x="210" y="290" fill="#64748b" font-size="12" text-anchor="middle">Mini: points vs. fitted line</text>
+      </g>
+
+      <!-- Residual lollipop panel -->
+      <g id="residPanel">
+        <rect x="410" y="30" width="540" height="420" fill="#fdfdff" stroke="#e0e7ff" rx="8"/>
+        <!-- Axes for residuals -->
+        <g stroke="#3b82f6" stroke-width="1.4" opacity="0.95">
+          <!-- y=0 baseline -->
+          <path d="M 430 240 L 930 240" />
+          <!-- left axis -->
+          <path d="M 430 60 L 430 420" />
+        </g>
+        <g id="lollipops" clip-path="url(#residClip)"></g>
+        <text x="680" y="460" fill="#64748b" font-size="12" text-anchor="middle">Residuals (stems) & mini squares (area ∝ r²)</text>
+      </g>
+
+      <!-- RMSE square gauge (bottom-left) -->
+      <g id="rmsePanel">
+        <rect x="30" y="300" width="360" height="150" fill="#fdfdff" stroke="#e0e7ff" rx="8"/>
+        <text x="210" y="322" fill="#64748b" font-size="12" text-anchor="middle">RMSE gauge (side length ∝ √MSE)</text>
+        <g id="rmseSquare"></g>
+      </g>
+    </svg>
+
+    <div class="hint">Drag sliders or press “Play (GD)”. Hover the residual panel to see the nearest sample’s \( y, \hat y, r, r^2 \).</div>
+  </div>
+
+<script>
+(function(){
+  // Theme constants
+  const BLUE = '#3b82f6', GREEN = '#16a34a';
+
+  // Layout / scales
+  // Mini scatter (normalized data to this)
+  const MINI = { x0:60, x1:360, y0:250, y1:60, w:300, h:190 };
+  const RES  = { x0:430, x1:930, y0:60, y1:420, w:500, h:360, yMid:240 }; // residual panel
+
+  const xMini = x => MINI.x0 + x * (MINI.w);
+  const yMini = y => MINI.y0 - y * (MINI.h);
+
+  // Residual panel x: samples 0..N-1 across
+  const xResIndex = (i, N) => {
+    if (N <= 1) return RES.x0 + RES.w/2;
+    return RES.x0 + (i / (N - 1)) * RES.w;
+  };
+  // Residual panel y: residuals r in roughly [-1,1] mapped to vertical range around mid
+  const yRes = r => {
+    // clamp visual to [-1.2, 1.2] to avoid overflow
+    const R = Math.max(-1.2, Math.min(1.2, r));
+    const half = (RES.h)/2;
+    return RES.yMid - (R * half / 1.2);
+  };
+
+  // DOM
+  const svg = document.getElementById('viz');
+  const miniPoints = document.getElementById('miniPoints');
+  const miniLine = document.getElementById('miniLine');
+  const lollipops = document.getElementById('lollipops');
+  const rmseSquareG = document.getElementById('rmseSquare');
+
+  const aRange = document.getElementById('aRange');
+  const bRange = document.getElementById('bRange');
+  const nRange = document.getElementById('nRange');
+  const noiseRange = document.getElementById('noiseRange');
+  const lrRange = document.getElementById('lrRange');
+
+  const aVal = document.getElementById('aVal');
+  const bVal = document.getElementById('bVal');
+  const nVal = document.getElementById('nVal');
+  const noiseVal = document.getElementById('noiseVal');
+  const lrVal = document.getElementById('lrVal');
+
+  const regenBtn = document.getElementById('regenBtn');
+  const playBtn = document.getElementById('playBtn');
+  const mseVal = document.getElementById('mseVal');
+  const nCount = document.getElementById('nCount');
+  const hoverInfo = document.getElementById('hoverInfo');
+
+  // Helpers
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  const predict = (a,b,x) => clamp01(a*x + b);
+
+  function showVals(){
+    aVal.textContent = (+aRange.value).toFixed(2);
+    bVal.textContent = (+bRange.value).toFixed(2);
+    nVal.textContent = nRange.value;
+    noiseVal.textContent = (+noiseRange.value).toFixed(2);
+    lrVal.textContent = (+lrRange.value).toFixed(3);
+  }
+
+  // RNG + data
+  let data = [];
+  let seed = 7;
+  function rng(){ seed = (seed*1664525 + 1013904223) >>> 0; return seed/4294967296; }
+
+  function regenerate(){
+    const N = parseInt(nRange.value,10);
+    const sigma = parseFloat(noiseRange.value);
+    const aTrue = 1.2, bTrue = 0.15;
+
+    data = [];
+    for (let i=0;i<N;i++){
+      const x = i/(N-1);
+      const u1 = Math.max(1e-12, rng()), u2 = Math.max(1e-12, rng());
+      const z = Math.sqrt(-2*Math.log(u1)) * Math.cos(2*Math.PI*u2);
+      const y = clamp01(aTrue*x + bTrue + sigma*z);
+      data.push({x,y});
+    }
+    drawAll();
+    nCount.innerHTML = `<small>Dots (N) = ${data.length}</small>`;
+  }
+
+  function mse(a,b){
+    let s = 0;
+    for (const p of data){
+      const r = p.y - predict(a,b,p.x);
+      s += r*r;
+    }
+    return s / data.length;
+  }
+
+  function drawMini(a,b){
+    miniPoints.innerHTML = '';
+    // points
+    for (const p of data){
+      const c = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      c.setAttribute('cx', xMini(p.x));
+      c.setAttribute('cy', yMini(p.y));
+      c.setAttribute('r', 3.8);
+      c.setAttribute('fill', BLUE);
+      c.setAttribute('stroke', 'white');
+      c.setAttribute('stroke-width', '1.1');
+      miniPoints.appendChild(c);
+    }
+    // line
+    const yL = predict(a,b,0), yR = predict(a,b,1);
+    miniLine.setAttribute('d', `M ${xMini(0)} ${yMini(yL)} L ${xMini(1)} ${yMini(yR)}`);
+  }
+
+  function drawResiduals(a,b){
+    lollipops.innerHTML = '';
+    const N = data.length;
+
+    for (let i=0;i<N;i++){
+      const p = data[i];
+      const xpx = xResIndex(i, N);
+      const yhat = predict(a,b,p.x);
+      const r = p.y - yhat;
+
+      // Lollipop stem from baseline (y=0) to residual height
+      const y0 = yRes(0);
+      const y1 = yRes(r);
+
+      // Stem
+      const stem = document.createElementNS('http://www.w3.org/2000/svg','line');
+      stem.setAttribute('x1', xpx);
+      stem.setAttribute('x2', xpx);
+      stem.setAttribute('y1', y0);
+      stem.setAttribute('y2', y1);
+      stem.setAttribute('stroke', BLUE);
+      stem.setAttribute('stroke-width', '2');
+      stem.setAttribute('opacity', '0.8');
+      lollipops.appendChild(stem);
+
+      // Head circle at residual tip (small)
+      const head = document.createElementNS('http://www.w3.org/2000/svg','circle');
+      head.setAttribute('cx', xpx);
+      head.setAttribute('cy', y1);
+      head.setAttribute('r', 3.5);
+      head.setAttribute('fill', BLUE);
+      head.setAttribute('stroke', 'white');
+      head.setAttribute('stroke-width', '1.0');
+      lollipops.appendChild(head);
+
+      // Mini square at baseline with area ∝ r^2 (side ∝ |r|)
+      const sidePx = Math.abs(r) * (RES.h/2) / 1.2; // map |r| to pixel side
+      if (sidePx > 0.6){ // skip tiny
+        const sq = document.createElementNS('http://www.w3.org/2000/svg','rect');
+        sq.setAttribute('x', xpx - sidePx/2);
+        sq.setAttribute('y', y0 - sidePx/2);
+        sq.setAttribute('width', sidePx);
+        sq.setAttribute('height', sidePx);
+        sq.setAttribute('fill', BLUE);
+        sq.setAttribute('opacity', '0.18');
+        sq.setAttribute('stroke', BLUE);
+        sq.setAttribute('stroke-width', '1');
+        sq.setAttribute('rx', '2');
+        lollipops.appendChild(sq);
+      }
+    }
+  }
+
+  function drawRMSE(a,b){
+    rmseSquareG.innerHTML = '';
+    const M = mse(a,b);
+    const RMSE = Math.sqrt(M);
+
+    // Gauge frame
+    const frameX = 60, frameY = 340, frameW = 300, frameH = 90;
+    // side length scaled to panel height (cap to keep neat)
+    const maxSide = 70;
+    const side = Math.min(maxSide, RMSE * 160); // 0..~70 px (feel free to tweak factor)
+
+    // Label
+    const lbl = document.createElementNS('http://www.w3.org/2000/svg','text');
+    lbl.setAttribute('x', 210);
+    lbl.setAttribute('y', frameY + 72);
+    lbl.setAttribute('fill', '#64748b');
+    lbl.setAttribute('font-size', '12');
+    lbl.setAttribute('text-anchor', 'middle');
+    lbl.textContent = `RMSE = ${RMSE.toFixed(4)}  •  MSE = ${M.toFixed(4)}`;
+    rmseSquareG.appendChild(lbl);
+
+    // Square centered
+    const sq = document.createElementNS('http://www.w3.org/2000/svg','rect');
+    sq.setAttribute('x', 210 - side/2);
+    sq.setAttribute('y', frameY + 18 - side/2 + 26);
+    sq.setAttribute('width', side);
+    sq.setAttribute('height', side);
+    sq.setAttribute('fill', BLUE);
+    sq.setAttribute('opacity', '0.18');
+    sq.setAttribute('stroke', BLUE);
+    sq.setAttribute('stroke-width', '1');
+    sq.setAttribute('rx', '4');
+    rmseSquareG.appendChild(sq);
+  }
+
+  function drawAll(){
+    const a = +aRange.value, b = +bRange.value;
+    showVals();
+    drawMini(a,b);
+    drawResiduals(a,b);
+    drawRMSE(a,b);
+    mseVal.innerHTML = `<b>Current MSE</b> = ${mse(a,b).toFixed(4)}`;
+  }
+
+  // Hover: nearest residual by x-index
+  svg.addEventListener('mousemove', (e)=>{
+    const pt = svg.createSVGPoint();
+    pt.x = e.clientX; pt.y = e.clientY;
+    const ctm = svg.getScreenCTM(); if (!ctm) return;
+    const loc = pt.matrixTransform(ctm.inverse());
+
+    // Only respond when inside residual panel bounds
+    if (loc.x < RES.x0 || loc.x > RES.x1 || loc.y < RES.y0 || loc.y > RES.y1){
+      hoverInfo.innerHTML = `<small>Hover: <b>y</b>=—, <b>ŷ</b>=—, <b>r</b>=—, <b>r²</b>=—</small>`;
+      return;
+    }
+
+    const N = data.length;
+    if (N === 0) return;
+    // Map x back to nearest index
+    const t = (loc.x - RES.x0) / RES.w;
+    let idx = Math.round(t * (N - 1));
+    idx = Math.max(0, Math.min(N - 1, idx));
+
+    const a = +aRange.value, b = +bRange.value;
+    const p = data[idx];
+    const yhat = predict(a,b,p.x);
+    const r = p.y - yhat;
+    hoverInfo.innerHTML = `<small>Hover: <b>y</b>=${p.y.toFixed(3)}, <b>ŷ</b>=${yhat.toFixed(3)}, <b>r</b>=${r.toFixed(3)}, <b>r²</b>=${(r*r).toFixed(4)}</small>`;
+  });
+
+  // Events
+  aRange.addEventListener('input', drawAll);
+  bRange.addEventListener('input', drawAll);
+  nRange.addEventListener('input', ()=>{ showVals(); regenerate(); });
+  noiseRange.addEventListener('input', ()=>{ showVals(); regenerate(); });
+  lrRange.addEventListener('input', showVals);
+
+  document.getElementById('regenBtn').addEventListener('click', regenerate);
+
+  // Simple gradient descent (on a,b) for demo
+  let playing=false, rafId=null;
+  function grads(a,b){
+    const N = data.length;
+    let dA=0, dB=0;
+    for (const p of data){
+      const yhat = predict(a,b,p.x);
+      const r = p.y - yhat;
+      dA += -2 * p.x * r;
+      dB += -2 * r;
+    }
+    return { dA:dA/N, dB:dB/N };
+  }
+  function step(){
+    if (!playing) return;
+    const eta = +lrRange.value;
+    let a = +aRange.value, b = +bRange.value;
+    const g = grads(a,b);
+    a = Math.max(+aRange.min, Math.min(+aRange.max, a - eta*g.dA));
+    b = Math.max(+bRange.min, Math.min(+bRange.max, b - eta*g.dB));
+    aRange.value = a.toFixed(3);
+    bRange.value = b.toFixed(3);
+    drawAll();
+    rafId = requestAnimationFrame(step);
+  }
+  document.getElementById('playBtn').addEventListener('click', ()=>{
+    playing = !playing;
+    playBtn.textContent = playing ? "⏸ Pause (GD)" : "▶ Play (GD)";
+    playBtn.classList.toggle('primary', !playing);
+    if (playing) step(); else cancelAnimationFrame(rafId);
+  });
+
+  // Init
+  regenerate();
+})();
+</script>
+</body>
+</html>
